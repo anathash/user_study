@@ -6,10 +6,10 @@ from db_analysis.db_setup import connect_to_db
 def get_data_for_query(query = None):
     if query == None:
         sql_query_string = "SELECT sequence, feedback FROM serp.exp_data"
-        filename = "answers_all.csv"
+        filename = "feedback_all.csv"
     else:
         sql_query_string = "SELECT sequence, feedback FROM serp.exp_data where query = '"+query +"'"
-        filename = "answers_"+ query+'.csv'
+        filename = "feedback_"+ query+'.csv'
     db = connect_to_db()
     mycursor = db.cursor()
     mycursor.execute(sql_query_string)
@@ -29,12 +29,12 @@ def get_data_for_query(query = None):
         results[config][answer] += 1
 
     with open('../output//'+filename, 'w', newline='') as csvfile:
-        fieldnames = ['configuration'] + list(possible_answers)
+        fieldnames = ['sequence'] + list(possible_answers)
 
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for config, counters in results.items():
-            row = {'configuration': config}
+            row = {'sequence': config}
             row.update(counters)
             for answer in possible_answers:
                 if answer not in row:

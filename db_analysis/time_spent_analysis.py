@@ -12,13 +12,13 @@ def get_time_diff(start, end):
     return time_spent
 
 
-def time_spent_in_serp_config_answer( query = None):
+def time_spent_in_serp_sequence_feedback( query = None):
     if query == None:
         sql_query_string = "SELECT sequence, feedback, start, end FROM serp.exp_data"
-        filename = "time_spent_per_answer_and_sequence" + '_all.csv'
+        filename = "time_spent_per_feedback_and_sequence" + '_all.csv'
     else:
         sql_query_string = "SELECT sequence, feedback, start, end FROM serp.exp_data where query = '" + query + "'"
-        filename = 'time_spent_per_answer_and_sequence' + '_' + query + '.csv'
+        filename = 'time_spent_per_feedback_and_sequence' + '_' + query + '.csv'
     db = connect_to_db()
     mycursor = db.cursor()
     mycursor.execute(sql_query_string)
@@ -41,15 +41,16 @@ def time_spent_in_serp_config_answer( query = None):
         results[sequence][feedback].append(time_spent)
 
     with open('../output//' + filename, 'w', newline='') as csvfile:
-        fieldnames = ['configuration', 'feedback', 'avg_minutes_spent']
+        fieldnames = ['sequence', 'feedback', 'avg_minutes_spent']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for sequence, feedbacks in results.items():
             for feedback, times in feedbacks.items():
                 avg_time = statistics.mean(times)
                 avg_time_formatted = float("{:.2f}".format(avg_time))
-                row = {'configuration': sequence, 'feedback': feedback, 'avg_minutes_spent':avg_time_formatted}
+                row = {'sequence': sequence, 'feedback': feedback, 'avg_minutes_spent':avg_time_formatted}
                 writer.writerow(row)
+
 
 def time_spent_in_serp(field, query = None):
     if query == None:
@@ -77,20 +78,23 @@ def time_spent_in_serp(field, query = None):
         results[grouped_field].append(time_spent)
 
     with open('../output//' + filename, 'w', newline='') as csvfile:
-        fieldnames = ['configuration', 'avg_minutes_spent']
+        fieldnames = [field, 'avg_minutes_spent']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for config, times in results.items():
+        for ft, times in results.items():
             avg_time = statistics.mean(times)
             avg_time_formatted = float("{:.2f}".format(avg_time))
-            row = {'configuration': config, 'avg_minutes_spent':avg_time_formatted}
+            row = {field: ft, 'avg_minutes_spent':avg_time_formatted}
             writer.writerow(row)
 
 if __name__ == "__main__":
-#    time_spent_in_serp_per_config('Does Omega Fatty Acids treat Adhd')
+    #time_spent_in_serp('sequence', 'Does Omega Fatty Acids treat Adhd')
+    #time_spent_in_serp('sequence')
+    #time_spent_in_serp('feedback')
+    #time_spent_in_serp('feedback', 'Does Omega Fatty Acids treat Adhd')
     #time_spent_in_serp('feedback')
     #time_spent_in_serp('sequence')
-    time_spent_in_serp_config_answer()
+    time_spent_in_serp_sequence_feedback('Does Omega Fatty Acids treat Adhd')
 
 
 
