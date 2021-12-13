@@ -1,9 +1,9 @@
 import csv
 
-from db_analysis.db_setup import connect_to_db
+from db_analysis.utils import connect_to_db
 
-
-def get_data_for_query(query = None):
+#TODO : filter by knowledge?? YES /NO/ ALL
+def get_data_for_query( query = None):
     if query == None:
         sql_query_string = "SELECT sequence, feedback FROM serp.exp_data"
         filename = "feedback_all.csv"
@@ -28,7 +28,7 @@ def get_data_for_query(query = None):
             results[config][answer] = 0
         results[config][answer] += 1
 
-    with open('../output//'+filename, 'w', newline='') as csvfile:
+    with open('../resources/output//'+filename, 'w', newline='') as csvfile:
         fieldnames = ['sequence'] + list(possible_answers)
 
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)

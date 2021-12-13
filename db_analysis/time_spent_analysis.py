@@ -1,17 +1,11 @@
 import csv
 import statistics
 
-from datetime import datetime
-from db_analysis.db_setup import connect_to_db
+
+from db_analysis.utils import connect_to_db, get_time_diff
 
 
-def get_time_diff(start, end):
-    start_datetime = datetime.strptime(start, '%m/%d/%Y, %I:%M:%S %p')
-    end_datetime = datetime.strptime(end, '%m/%d/%Y, %I:%M:%S %p')
-    time_spent = (end_datetime - start_datetime).total_seconds() / 60
-    return time_spent
-
-
+#TODO: filter by knowledge??
 def time_spent_in_serp_sequence_feedback( query = None):
     if query == None:
         sql_query_string = "SELECT sequence, feedback, start, end FROM serp.exp_data"
@@ -40,7 +34,7 @@ def time_spent_in_serp_sequence_feedback( query = None):
         time_spent = get_time_diff(start, end)
         results[sequence][feedback].append(time_spent)
 
-    with open('../output//' + filename, 'w', newline='') as csvfile:
+    with open('../resources/output//' + filename, 'w', newline='') as csvfile:
         fieldnames = ['sequence', 'feedback', 'avg_minutes_spent']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -77,7 +71,7 @@ def time_spent_in_serp(field, query = None):
         time_spent = get_time_diff(start, end)
         results[grouped_field].append(time_spent)
 
-    with open('../output//' + filename, 'w', newline='') as csvfile:
+    with open('../resources/output//' + filename, 'w', newline='') as csvfile:
         fieldnames = [field, 'avg_minutes_spent']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()

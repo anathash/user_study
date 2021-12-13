@@ -1,5 +1,5 @@
 import csv
-from db_analysis.db_setup import connect_to_db
+from db_analysis.utils import connect_to_db
 
 
 def get_exp_clicks(myresult, query):
@@ -36,6 +36,7 @@ def get_results(sql_query_string):
     mycursor.execute(sql_query_string)
     return mycursor.fetchall()
 
+#TODO filter by knowledge??
 def link_clicked_per_rank(field, query = None):
     if query == None:
         sql_query_string = "SELECT exp_id, end," + field + " FROM serp.exp_data"
@@ -61,7 +62,7 @@ def link_clicked_per_rank(field, query = None):
             results[grouped_field][rank] += 1
 
 
-    with open('../output//' + filename, 'w', newline='') as csvfile:
+    with open('../resources/output//' + filename, 'w', newline='') as csvfile:
         fieldnames = [field]
         fieldnames .extend([x for x in range(1,11)])
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -103,7 +104,7 @@ def link_clicked_per_rank_feedback_and_sequence(query = None):
             results[sequence][feedback][rank] += 1
 
 
-    with open('../output//' + filename, 'w', newline='') as csvfile:
+    with open('../resources/output//' + filename, 'w', newline='') as csvfile:
         fieldnames = ['sequence', 'feedback']
         fieldnames .extend([x for x in range(1,11)])
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
