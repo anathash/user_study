@@ -1,19 +1,21 @@
 import csv
+from datetime import datetime
+from db_analysis.utils import connect_to_db, get_time_spent, filter_user, string_to_datetime, get_links_per_worker
 
-from db_analysis.utils import connect_to_db, get_time_spent, filter_user
-
-ANSWERS = ['Y','M','N']
+ANSWERS = ['Y','M','N','NS']
 
 #TODO : filter by knowledge?? YES /NO/ ALL
 def get_data_for_query( query = None):
-    if query == None:
-        sql_query_string = "SELECT * FROM serp.exp_data"
-        filename = "feedback_all.csv"
-    else:
-        sql_query_string = "SELECT * FROM serp.exp_data where query = '"+query +"'"
-        filename = "feedback_"+ query+'.csv'
     db = connect_to_db()
     mycursor = db.cursor()
+    links = get_links_per_worker(mycursor)
+
+    if query == None:
+        sql_query_string = "SELECT user_id,query,treatment,problem, knowledge, start, end, sequence, feedback, reason FROM serp.exp_data"
+        filename = "feedback_all.csv"
+    else:
+        sql_query_string = "SELECT user_id,query,treatment,problem, knowledge, start, end, sequence, feedback, reason FROM serp.exp_data where query = '"+query +"'"
+        filename = "feedback_"+ query+'.csv'
     mycursor.execute(sql_query_string)
 
     myresult = mycursor.fetchall()
@@ -21,27 +23,41 @@ def get_data_for_query( query = None):
     results = dict()
     possible_answers = set()
     for x in myresult:
-        user = x[1]
-        query = [5]
-        treatment_answer = x[12]
-        condition_answer = x[13]
-        prev_know = x[9]
-        start = x[7]
-        end = x[8]
-        time = get_time_spent(start, end)
-        if filter_user(user, query, treatment_answer, condition_answer, time, prev_know):
+        user = x[0]
+        query = x[1]
+        treatment_answer = x[2]
+        condition_answer = x[3]
+        prev_know = x[4]
+        start = x[5]
+        end = x[6]
+
+        if not end:
+            continue
+        sdt = string_to_datetime(start)
+        edt = string_to_datetime(end)
+        time = get_time_spent(sdt, edt)
+        reason = x[9]
+        if filter_user(user, query, treatment_answer, condition_answer, time, prev_know, reason):
+            continue
+        if user not in links:
             continue
 
-        config = x[6]
-        answer = x[11]
+        config = x[7]
+        answer = x[8]
+        print(user)
         if config not in results:
-            results[config] = dict()
-        if answer not in results[config]:
-            results[config][answer] = 0
+            results[config] = {'Y':0,'N':0,'M':0,'NS':0}
+            for i in range (1,11):
+                results[config]['link'+str(i)] = 0
         results[config][answer] += 1
+        user_links = links[user]
+        for l in user_links:
+            results[config]['link'+str(l)] += 1
 
     with open('../resources/output//'+filename, 'w', newline='') as csvfile:
         fieldnames = ['sequence'] + ANSWERS
+        for i in range(1, 11):
+            fieldnames.append('link'+str(i))
 
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()

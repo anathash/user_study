@@ -1,7 +1,10 @@
 import csv
+import os
+import requests
 from datetime import date
 
-from db_analysis.utils import connect_to_db, get_time_diff, get_num_links_per_worker, get_time_diff_from_actions
+from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
+    get_links_per_worker, get_workers_with_no_link
 
 BATCH_FILE_PREFIX = '../resources/batch results/batch'
 NUM_MNUTES_FOR_BONUS = 2
@@ -9,28 +12,33 @@ NUM_LINKS_FOR_BONUS = 1
 BONUS = 1
 
 
-def get_worker_id_list(batch_number):
-    with open(BATCH_FILE_PREFIX + str(batch_number) + '_amazon.csv', newline='') as csvfile:
-        amazon_results = {}
-        reader = csv.DictReader(csvfile)
-        ids_sql_string = '('
+def get_worker_id_list(from_batch, to_batch=None):
+    amazon_results = {}
+    ids_sql_string = '('
+    if not to_batch:
+        to_batch = from_batch
+    for batch_number in range(from_batch, to_batch+1):
+        fname = BATCH_FILE_PREFIX + str(batch_number) + '_amazon.csv'
+        if not os.path.isfile(fname):
+            continue
+        with open(fname, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            # get survey codes from db
+            for row in reader:
+                worker_id = row['WorkerId']
+                amazon_results[worker_id] = row
+                ids_sql_string += "'" + worker_id + "',"
 
-        # get survey codes from db
-        for row in reader:
-            worker_id = row['WorkerId']
-            amazon_results[worker_id] = row
-            ids_sql_string += "'" + worker_id + "',"
-
-        ids_sql_string = ids_sql_string[:-1]
-        ids_sql_string += ')'
-        return amazon_results, ids_sql_string
+            ids_sql_string = ids_sql_string[:-1]
+    ids_sql_string += ')'
+    return amazon_results, ids_sql_string
 
 
 #TODO: update payments csv
 def process_bonus(batch_number, worker_ids):
     db = connect_to_db()
     dbcursor = db.cursor()
-    num_links_pers_workers = get_num_links_per_worker(dbcursor, worker_ids)
+    num_links_pers_workers = get_links_per_worker(dbcursor, worker_ids)
 
     bonus_workers = []
 
@@ -59,7 +67,7 @@ def process_bonus(batch_number, worker_ids):
 
 def get_bonuses_workers(dbcursor, worker_ids):
     bonus_workers = set()
-    num_links_per_workers = get_num_links_per_worker(dbcursor, worker_ids)
+    num_links_per_workers = get_links_per_worker(dbcursor, worker_ids)
     sql_exp_data_query_string = "SELECT exp_id, user_id, start, end  FROM serp.exp_data where user_id in " + worker_ids
     dbcursor.execute(sql_exp_data_query_string)
     exp_data = dbcursor.fetchall()
@@ -80,7 +88,7 @@ def get_bonuses_workers(dbcursor, worker_ids):
     return bonus_workers
 
 
-def process_survery_code( amazon_results, ids_sql_string, batch_number, base_payment, bonus_payment = 0, update_paymets_file = True):
+def process_survery_code( amazon_results, ids_sql_string,  base_payment,from_batch, to_batch = None, bonus_payment = 0, update_paymets_file = True):
     today = date.today()
 
     workers_to_pay = []
@@ -106,7 +114,12 @@ def process_survery_code( amazon_results, ids_sql_string, batch_number, base_pay
             workers_not_finished.append(amazon_id_db)
 
     payment_report_file = '../resources/batch results//user_study_payment_report.csv'
-    amazon_report_csv_filename =  BATCH_FILE_PREFIX + str(batch_number) + '_approve_reject_report.csv'
+
+    if to_batch:
+        amazon_report_csv_filename = BATCH_FILE_PREFIX + str(from_batch) + '_to_' + str(to_batch) + '_approve_reject_report.csv'
+    else:
+        amazon_report_csv_filename = BATCH_FILE_PREFIX + str(from_batch) + '_approve_reject_report.csv'
+
     with open(amazon_report_csv_filename, 'w', newline='') as amazon_report_csv,\
             open(payment_report_file, 'a', newline='') as payment_report_csv:
 
@@ -134,21 +147,45 @@ def process_survery_code( amazon_results, ids_sql_string, batch_number, base_pay
                     payment_report_file_writer.writerow({'WorkerId': worker_id, 'payment':str(worker_payment)+'$','date': today})
 
             elif worker_id in workers_not_finished:
-                amazon_report_writer.writerow({'worker_id': worker_id, 'AssignmentId': assignment_id,
+                amazon_report_writer.writerow({'WorkerId': worker_id,'AssignmentId': assignment_id,
                                                      'HITId': hit_id, 'Reject':'The survey code entered does not match our records'})
 
 
-def process_batch(batch_number):
+def process_batch(from_batch, to_batch=None):
     payment = 1.2
     bonus = 1.2
-    amazon_results, ids_sql_string = get_worker_id_list(batch_number)
-    process_survery_code(amazon_results, ids_sql_string,batch_number, payment, bonus, False)
+    amazon_results, ids_sql_string = get_worker_id_list(from_batch,to_batch )
+    process_survery_code(amazon_results, ids_sql_string, payment, from_batch,to_batch,   bonus, True)
   #  process_bonus(batch_number, ids_sql_string)
 
 
-if __name__ == "__main__":
-    process_batch(12)
+def print_workers_with_no_links(from_batch=None, to_batch=None):
+    db = connect_to_db()
+    dbcursor = db.cursor()
+    if from_batch:
+        amazon_results, ids_sql_string = get_worker_id_list(from_batch, to_batch)
+        ignore = get_workers_with_no_link(dbcursor, ids_sql_string)
+    else:
+        ignore = get_workers_with_no_link(dbcursor)
+    if len(ignore) == 0:
+        print('All workers entered at least one link')
+    else:
+        print(ignore)
+#
 
+def add_assignemnts(num):
+    url = 'http://mturk-requester.us-east-1.amazonaws.com'
+    myobj = {'HITId': '3VO4XFFP15NS7CMT4E5RXTRG6SXQ7Q', 'HITNumberOfAdditionalAssignments':str(num)}
+
+    x = requests.post(url, data=myobj)
+
+    print(x.text)
+
+
+if __name__ == "__main__":
+    #add_assignemnts(5)
+    print_workers_with_no_links()
+    #process_batch(18)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
 
 
