@@ -1,7 +1,7 @@
 import csv
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
-    TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user
+    TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
 
 
@@ -20,7 +20,8 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
 
     else:
         exp_data_query_string = "SELECT * FROM serp.exp_data"
-        links = get_links_entered_by_worker(mycursor)
+        #links = get_links_entered_by_worker(mycursor)
+        links, link_times = get_links_stats(mycursor)
 
     mycursor.execute(exp_data_query_string)
     myresult = mycursor.fetchall()
@@ -35,14 +36,15 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
         else:
             time_diff_exp = 0
 
-        time_diff_actions, time_diff_exp = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
+#        time_diff_actions, time_diff_exp = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
+        time_diff_actions = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
 
 
         #This means that the exp_id was regenerated - so we take the difference between the first clicked link and the end time. This bug should be fixed
         answer_treatment = x[12].strip()
         answer_condition = x[13].strip()
         query = x[5]
-        if filter_users and filter_user(x[1], query, answer_treatment, answer_condition, time_diff_exp, x[9], x[11]):
+        if filter_users and filter_user(x[1], query, answer_treatment, answer_condition, time_diff_exp,  x[9], x[11]):
             continue
 
         time_diff_exp = "%.4f" % round(time_diff_exp, 2)
@@ -61,8 +63,9 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
                 link_pressed = links[worker_id][i]
                 entry['link'+str(i)] =link_pressed
                 num_links += link_pressed
+                entry['link'+str(i)+'_time'] = link_times[worker_id][i]
 
-        entry['links_pressed'] = num_links
+        entry['num_links_pressed'] = num_links
         exp_data.append(entry)
     if not from_batch:
         filename = '../resources/output//user_behaviour.csv'
@@ -71,8 +74,10 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
     else:
         filename = BATCH_FILE_PREFIX+str(from_batch)+'_to_'+str(to_batch)+'_user_behaviour.csv'
     with open(filename, 'w', newline='', encoding='utf8') as csvfile:
-        fieldnames = ['exp_id', 'WorkerId', 'sequence','url','start_time', 'search_time_exp','search_time_actions','links_pressed','knowledge','feedback','reason','treatment_answer_correct','condition_answer_correct','comments',
-                      'link1', 'link2', 'link3', 'link4', 'link5', 'link6', 'link7', 'link8', 'link9', 'link10']
+        fieldnames = ['exp_id', 'WorkerId', 'sequence','url','start_time', 'search_time_exp','search_time_actions',
+                      'num_links_pressed','knowledge','feedback','reason','treatment_answer_correct','condition_answer_correct','comments',
+                      'link1', 'link2', 'link3', 'link4', 'link5', 'link6', 'link7', 'link8', 'link9', 'link10',
+                      'link1_time', 'link2_time', 'link3_time', 'link4_time', 'link5_time', 'link6_time', 'link7_time', 'link8_time', 'link9_time', 'link10_time']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for row in exp_data:

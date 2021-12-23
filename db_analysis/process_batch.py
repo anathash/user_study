@@ -11,6 +11,7 @@ NUM_MNUTES_FOR_BONUS = 2
 NUM_LINKS_FOR_BONUS = 1
 BONUS = 1
 
+payment_report_file = '../resources/batch results//user_study_payment_report.csv'
 
 def get_worker_id_list(from_batch, to_batch=None):
     amazon_results = {}
@@ -26,8 +27,12 @@ def get_worker_id_list(from_batch, to_batch=None):
             # get survey codes from db
             for row in reader:
                 worker_id = row['WorkerId']
-                amazon_results[worker_id] = row
-                ids_sql_string += "'" + worker_id + "',"
+                if worker_id in amazon_results:
+                    print('duplicate!!')
+                    print(row)
+                else:
+                    amazon_results[worker_id] = row
+                    ids_sql_string += "'" + worker_id + "',"
 
             ids_sql_string = ids_sql_string[:-1]
     ids_sql_string += ')'
@@ -88,7 +93,16 @@ def get_bonuses_workers(dbcursor, worker_ids):
     return bonus_workers
 
 
+def get_paid_workers():
+    paid_workers = {}
+    with open(payment_report_file,  newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            paid_workers[row['WorkerId']] = row['date']
+    return paid_workers
+
 def process_survery_code( amazon_results, ids_sql_string,  base_payment,from_batch, to_batch = None, bonus_payment = 0, update_paymets_file = True):
+
     today = date.today()
 
     workers_to_pay = []
@@ -103,7 +117,6 @@ def process_survery_code( amazon_results, ids_sql_string,  base_payment,from_bat
 
     mycursor.execute(sql_query_string)
     dbresult = mycursor.fetchall()
-
     for r in dbresult:
         amazon_id_db = r[1]
         survey_code_db = r[2]
@@ -113,7 +126,6 @@ def process_survery_code( amazon_results, ids_sql_string,  base_payment,from_bat
         else:
             workers_not_finished.append(amazon_id_db)
 
-    payment_report_file = '../resources/batch results//user_study_payment_report.csv'
 
     if to_batch:
         amazon_report_csv_filename = BATCH_FILE_PREFIX + str(from_batch) + '_to_' + str(to_batch) + '_approve_reject_report.csv'
@@ -128,32 +140,37 @@ def process_survery_code( amazon_results, ids_sql_string,  base_payment,from_bat
 
         amazon_report_writer = csv.DictWriter(amazon_report_csv, fieldnames=['WorkerId', 'AssignmentId','HITId','Approve', 'Reject', 'Bonus'])
         amazon_report_writer.writeheader()
-
+        paid_workers = get_paid_workers()
         for worker_id, row in amazon_results.items():
             assignment_id = row['AssignmentId']
             hit_id = row['HITId']
             if worker_id in workers_to_pay:
-                if worker_id in bonus_dict:
-                    worker_payment = base_payment +  bonus_payment
-                    bonus = 'X'
+                if worker_id not in paid_workers:
+
+                    if worker_id in bonus_dict:
+                        worker_payment = base_payment +  bonus_payment
+                        bonus = 'X'
+                    else:
+                        worker_payment = base_payment
+                        bonus = ''
+
+                    amazon_report_writer.writerow({'WorkerId': worker_id, 'AssignmentId': assignment_id,
+                                                         'HITId': hit_id, 'Approve':'x', 'Bonus':bonus})
+
+                    if update_paymets_file:
+                        payment_report_file_writer.writerow({'WorkerId': worker_id, 'payment':str(worker_payment)+'$','date': today})
                 else:
-                    worker_payment = base_payment
-                    bonus = ''
-
-                amazon_report_writer.writerow({'WorkerId': worker_id, 'AssignmentId': assignment_id,
-                                                     'HITId': hit_id, 'Approve':'x', 'Bonus':bonus})
-
-                if update_paymets_file:
-                    payment_report_file_writer.writerow({'WorkerId': worker_id, 'payment':str(worker_payment)+'$','date': today})
-
+                    amazon_report_writer.writerow({'WorkerId': worker_id, 'AssignmentId': assignment_id,
+                                                   'HITId': hit_id,
+                                                   'Reject': 'Worker already paid for assignment'})
             elif worker_id in workers_not_finished:
                 amazon_report_writer.writerow({'WorkerId': worker_id,'AssignmentId': assignment_id,
                                                      'HITId': hit_id, 'Reject':'The survey code entered does not match our records'})
 
 
 def process_batch(from_batch, to_batch=None):
-    payment = 1.2
-    bonus = 1.2
+    payment = 1.4
+    bonus = 1.4
     amazon_results, ids_sql_string = get_worker_id_list(from_batch,to_batch )
     process_survery_code(amazon_results, ids_sql_string, payment, from_batch,to_batch,   bonus, True)
   #  process_bonus(batch_number, ids_sql_string)
@@ -184,8 +201,8 @@ def add_assignemnts(num):
 
 if __name__ == "__main__":
     #add_assignemnts(5)
-    print_workers_with_no_links()
-    #process_batch(18)
+    #print_workers_with_no_links()
+    process_batch(18,21)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
 
 

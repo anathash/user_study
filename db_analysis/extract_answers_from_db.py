@@ -5,17 +5,21 @@ from db_analysis.utils import connect_to_db, get_time_spent, filter_user, string
 ANSWERS = ['Y','M','N','NS']
 
 #TODO : filter by knowledge?? YES /NO/ ALL
-def get_data_for_query( query = None):
+def get_data_for_query( query = None, prefix= None):
     db = connect_to_db()
     mycursor = db.cursor()
     links = get_links_per_worker(mycursor)
 
     if query == None:
         sql_query_string = "SELECT user_id,query,treatment,problem, knowledge, start, end, sequence, feedback, reason FROM serp.exp_data"
-        filename = "feedback_all.csv"
+        filename = "feedback_all"
     else:
         sql_query_string = "SELECT user_id,query,treatment,problem, knowledge, start, end, sequence, feedback, reason FROM serp.exp_data where query = '"+query +"'"
-        filename = "feedback_"+ query+'.csv'
+        filename = "feedback_"+ query
+    if prefix:
+        filename += '_prefix_'+str(prefix)+'.csv'
+    else:
+        filename += '.csv'
     mycursor.execute(sql_query_string)
 
     myresult = mycursor.fetchall()
@@ -43,6 +47,8 @@ def get_data_for_query( query = None):
             continue
 
         config = x[7]
+        if prefix:
+            config = config[:prefix]
         answer = x[8]
         print(user)
         if config not in results:
@@ -53,6 +59,7 @@ def get_data_for_query( query = None):
         user_links = links[user]
         for l in user_links:
             results[config]['link'+str(l)] += 1
+
 
     with open('../resources/output//'+filename, 'w', newline='') as csvfile:
         fieldnames = ['sequence'] + ANSWERS
@@ -72,7 +79,8 @@ def get_data_for_query( query = None):
 
 if __name__ == "__main__":
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    get_data_for_query()
+    get_data_for_query(prefix=1)
+    #get_data_for_query()
 
 
 

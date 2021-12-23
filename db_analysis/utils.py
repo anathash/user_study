@@ -16,7 +16,6 @@ WORKERS_WITH_NO_LINKS = ['A0505289TSH2NC1YOHYK', 'A26UIS59SY4NM6', 'A272X64FOZFY
 
 test_users_names_prefix = ['anat', 'anst','sharadhi','test']
 
-FILTER_PERV_KNOWLEDGE = True
 
 
 def connect_to_db(test = False):
@@ -71,7 +70,7 @@ def unsatisfactory(query, treatment_answer, condition_answer, time):
         return True
 
 
-def filter_user(user, query, treatment_answer, condition_answer, time, prev_know, reason):
+def filter_user(user, query, treatment_answer, condition_answer, time, prev_know, reason, filter_prev_know = True):
     for test_user in test_users_names_prefix:
         if user.lower().startswith(test_user):
             return True
@@ -84,7 +83,7 @@ def filter_user(user, query, treatment_answer, condition_answer, time, prev_know
     if unsatisfactory(query, treatment_answer, condition_answer, time):
         return True
 
-    if FILTER_PERV_KNOWLEDGE and prev_know == 'yes':
+    if filter_prev_know and prev_know == 'yes':
         return True
 
     return False
@@ -112,10 +111,12 @@ def get_time_diff_from_actions(dbcursor, user_id, exp_time, exp_end_time, to_min
         if not start or time_str < start:
             start = time_str
     actions_time = get_time_spent(start, end, to_minutes)
-    if exp_time > 0 and actions_time > exp_time:
-        end_str = datetime.strptime(exp_end_time, '%m/%d/%Y, %I:%M:%S %p')
-        exp_time = get_time_spent(start, end_str, to_minutes)
-    return actions_time, exp_time
+    return actions_time
+ #   if exp_time > 0 and actions_time > exp_time:
+ #       end_str = datetime.strptime(exp_end_time, '%m/%d/%Y, %I:%M:%S %p')
+ #       exp_time = get_time_spent(start, end_str, to_minutes)
+  #  return actions_time, exp_time
+
 
 
 def get_time_diff(start, end, to_minutes = True):
@@ -126,11 +127,44 @@ def get_time_diff(start, end, to_minutes = True):
     return get_time_spent(start_datetime, end_datetime, to_minutes)
 
 
+def get_links_stats(dbcursor, worker_ids = None):
+    if worker_ids:
+        sql_user_action_query_string = "SELECT  user_id, link_id, date FROM serp.user_action where action ='click link' and user_id in " + worker_ids
+    else:
+        sql_user_action_query_string = "SELECT  user_id, link_id, date FROM serp.user_action where action ='click link'"
+
+    dbcursor.execute(sql_user_action_query_string)
+    user_actions = dbcursor.fetchall()
+    links_pressed = {}
+    links = {}
+    for l in user_actions:
+        user_id = l[0]
+        link_id = l[1]
+        t_press = l[2]
+        if user_id not in links:
+            links[user_id] = []
+            links_pressed[user_id] = {l: 0 for l in range(1, 11)}
+        links_pressed[user_id][link_id] = 1
+        links[user_id].append({'link_id':link_id,'date':string_to_datetime(t_press)})
+    link_times = {}
+    for user, l in links.items():
+        links_by_date = sorted(l, key = lambda i: i['date'])
+        if user not in link_times:
+            link_times[user] = {x: 0 for x in range(0, 11)}
+        for i in range (0, len(links_by_date)-1):
+            rank = links_by_date[i]['link_id']
+            date = links_by_date[i]['date']
+            next_action = links_by_date[i+1]['date']
+            time_diff = get_time_spent(date,next_action, False)
+            link_times[user][rank] += time_diff
+    return links_pressed, link_times
+
+
 def get_links_entered_by_worker(dbcursor, worker_ids = None):
     if worker_ids:
-        sql_user_action_query_string = "SELECT exp_id, user_id, link_id FROM serp.user_action where action ='click link' and user_id in " + worker_ids
+        sql_user_action_query_string = "SELECT exp_id, user_id, link_id, date FROM serp.user_action where action ='click link' and user_id in " + worker_ids
     else:
-        sql_user_action_query_string = "SELECT exp_id, user_id, link_id FROM serp.user_action where action ='click link'"
+        sql_user_action_query_string = "SELECT exp_id, user_id, link_id, date FROM serp.user_action where action ='click link'"
 
     dbcursor.execute(sql_user_action_query_string)
     user_actions = dbcursor.fetchall()
@@ -138,6 +172,7 @@ def get_links_entered_by_worker(dbcursor, worker_ids = None):
     for x in user_actions:
         user_id = x[1]
         link_id = x[2]
+        t_press = x[3]
         if user_id not in links:
             links[user_id] = {l: 0 for l in range(1, 11)}
         links[user_id][link_id] = 1
