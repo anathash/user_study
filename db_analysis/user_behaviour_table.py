@@ -1,8 +1,13 @@
 import csv
+import scipy.stats as stats
+
+import pandas as pd
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
-    TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats
+    TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats, \
+    SERVER_URL
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
+BEHAVIOUR_FILE = '../resources/reports//user_behaviour.csv'
 
 
 #TODO : filter by knowledge?? YES /NO/ ALL
@@ -44,7 +49,7 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
         answer_treatment = x[12].strip()
         answer_condition = x[13].strip()
         query = x[5]
-        if filter_users and filter_user(x[1], query, answer_treatment, answer_condition, time_diff_exp,  x[9], x[11]):
+        if filter_users and filter_user(x[1], query, answer_treatment, answer_condition, start,end,  x[9], x[11]):
             continue
 
         time_diff_exp = "%.4f" % round(time_diff_exp, 2)
@@ -68,7 +73,7 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
         entry['num_links_pressed'] = num_links
         exp_data.append(entry)
     if not from_batch:
-        filename = '../resources/output//user_behaviour.csv'
+        filename = '../resources/reports//user_behaviour.csv'
     elif from_batch == to_batch:
         filename = BATCH_FILE_PREFIX + str(from_batch) + '_user_behaviour.csv'
     else:
@@ -84,6 +89,63 @@ def generate_user_behaviour_table(from_batch = None, to_batch=None, filter_users
             writer.writerow(row)
 
 
+def get_answer_count(mode = 'url', print_update_query = True):
+    db = connect_to_db()
+    mycursor = db.cursor()
+    answer_seq_dict = {}
+    query = 'SELECT URL FROM serp.config_data;'
+    mycursor.execute(query)
+    myresult = mycursor.fetchall()
+    for x in myresult:
+        db_url = x[0]
+        db_seq = db_url.split('SERP/')[1]
+        if mode == 'seq':
+            db_seq = db_seq[:-6]
+        answer_seq_dict[db_seq] = 0
+
+
+    with open( '../resources/reports//user_behaviour.csv', newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            query_seq = row['url']
+            if mode == 'seq':
+                query_seq = query_seq[:-6]
+            if query_seq not in answer_seq_dict:
+                answer_seq_dict[query_seq] = 0
+            answer_seq_dict[query_seq] += 1
+    if mode == 'seq':
+        fname = '../resources/reports/answers_per_query_seq.csv'
+    else:
+        fname = '../resources/reports/answers_per_url.csv'
+    with open(fname, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=['query_seq', 'count'])
+        writer.writeheader()
+        for seq, count in answer_seq_dict.items():
+            writer.writerow({'query_seq': seq, 'count': answer_seq_dict[seq]})
+            if print_update_query:
+                print('UPDATE serp.config_data set used =0, answered = ' + str(count) + " where URL='"+SERVER_URL+seq+"';")
+
+
+def group_behaviour(metric_field, group_by, output_file_name, csv=None):
+    data = {}
+    with open(BEHAVIOUR_FILE, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            metric_val = row[metric_field]
+            group_by_value = row[group_by]
+            if group_by_value not in data:
+                data[group_by_value] = []
+            data[group_by_value].append(metric_val)
+    with open('../resources/reports/'+output_file_name,'w',newline='') as csvfile:
+        filednames = list(data.keys())
+        writer = csv.DictWriter(csvfile, filednames)
+        writer.writeheader()
+
+
+
+
 if __name__ == "__main__":
-    generate_user_behaviour_table(filter_users = True)
+    get_answer_count()
+
+    #generate_user_behaviour_table(filter_users = True)
 

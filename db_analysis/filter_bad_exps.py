@@ -24,9 +24,9 @@ def get_answers_per_url(dbcursor):
         end = x[7]
      #   sdt = string_to_datetime(start)
     #    edt = string_to_datetime(end)
-        time_spent = get_time_diff(start, end)
+       # time_spent = get_time_diff(start, end)
 
-        if not filter_user(user_id, query, treatment_answer, condition_answer, time_spent, prev_know, x[8]):
+        if not filter_user(user_id, query, treatment_answer, condition_answer, start, end, prev_know, x[8]):
             answers[url] += 1
     return answers
 
@@ -39,6 +39,7 @@ def update_config_table(dbcursor):
         query = "UPDATE serp.config_data SET answered = " +str(answered) +" WHERE URL = '"+url+"'"
         print(query+';')
      #   dbcursor.execute(query)
+
 
 
 if __name__ == "__main__":

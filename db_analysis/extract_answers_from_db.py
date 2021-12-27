@@ -1,6 +1,6 @@
 import csv
 from datetime import datetime
-from db_analysis.utils import connect_to_db, get_time_spent, filter_user, string_to_datetime, get_links_per_worker
+from db_analysis.utils import connect_to_db, filter_user, get_links_per_worker
 
 ANSWERS = ['Y','M','N','NS']
 
@@ -37,11 +37,8 @@ def get_data_for_query( query = None, prefix= None):
 
         if not end:
             continue
-        sdt = string_to_datetime(start)
-        edt = string_to_datetime(end)
-        time = get_time_spent(sdt, edt)
         reason = x[9]
-        if filter_user(user, query, treatment_answer, condition_answer, time, prev_know, reason):
+        if filter_user(user, query, treatment_answer, condition_answer, start, end, prev_know, reason):
             continue
         if user not in links:
             continue
@@ -61,7 +58,7 @@ def get_data_for_query( query = None, prefix= None):
             results[config]['link'+str(l)] += 1
 
 
-    with open('../resources/output//'+filename, 'w', newline='') as csvfile:
+    with open('../resources/reports//'+filename, 'w', newline='') as csvfile:
         fieldnames = ['sequence'] + ANSWERS
         for i in range(1, 11):
             fieldnames.append('link'+str(i))
@@ -79,7 +76,7 @@ def get_data_for_query( query = None, prefix= None):
 
 if __name__ == "__main__":
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    get_data_for_query(prefix=1)
+    get_data_for_query()
     #get_data_for_query()
 
 

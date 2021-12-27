@@ -12,11 +12,13 @@ CONDITION_CORRECT_ANSWERS={'Does Omega Fatty Acids treat Adhd':'neurological',
 
 FILTER_TIME = 1
 
-WORKERS_WITH_NO_LINKS = ['A0505289TSH2NC1YOHYK', 'A26UIS59SY4NM6', 'A272X64FOZFYLB', 'A2EED3HLTA96CP', 'AERUGBNS48Z4N', 'A3N6DWJC7P3HSI', 'A2TLN8489YGY81']
+WORKERS_WITH_NO_LINKS = ['A0505289TSH2NC1YOHYK', 'A26UIS59SY4NM6', 'A272X64FOZFYLB', 'A2EED3HLTA96CP', 'AERUGBNS48Z4N', 'A3N6DWJC7P3HSI', 'A2TLN8489YGY81','A3S3WYVCVWW8IZ']
 
-test_users_names_prefix = ['anat', 'anst','sharadhi','test']
+test_users_names_prefix = ['anat', 'anst','sharadhi','test', 'tamar','tetst']
 
+EXP_START_DATE = datetime.strptime('12/21/2021, 01:01:31 AM', '%m/%d/%Y, %I:%M:%S %p')
 
+SERVER_URL = "http://cs.virginia.edu/~zw3hk/SERP/"
 
 def connect_to_db(test = False):
     if test:
@@ -70,7 +72,16 @@ def unsatisfactory(query, treatment_answer, condition_answer, time):
         return True
 
 
-def filter_user(user, query, treatment_answer, condition_answer, time, prev_know, reason, filter_prev_know = True):
+def filter_user(user, query, treatment_answer, condition_answer, start,end, prev_know,
+                reason, filter_prev_know = True, filter_exp_start=True):
+    if not end or not start:
+        return True
+    sdt = string_to_datetime(start)
+    edt = string_to_datetime(end)
+    time = get_time_spent(sdt, edt)
+    if filter_exp_start and sdt < EXP_START_DATE:
+        return True
+
     for test_user in test_users_names_prefix:
         if user.lower().startswith(test_user):
             return True
