@@ -7,7 +7,7 @@ from datetime import date
 import xmltodict
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
-    get_links_per_worker, get_workers_with_no_link
+    get_links_per_worker, get_workers_with_no_link, filter_user
 from turk_api import AMT_api
 
 BATCH_FILE_PREFIX = '../resources/batch results/batch'
@@ -77,16 +77,22 @@ def process_bonus(batch_number, worker_ids):
 def get_bonuses_workers(dbcursor, worker_ids):
     bonus_workers = set()
     num_links_per_workers = get_links_per_worker(dbcursor, worker_ids)
-    sql_exp_data_query_string = "SELECT exp_id, user_id, start, end  FROM serp.exp_data where user_id in " + worker_ids
+    sql_exp_data_query_string = "SELECT *  FROM serp.exp_data where user_id in " + worker_ids
     dbcursor.execute(sql_exp_data_query_string)
     exp_data = dbcursor.fetchall()
     for r in exp_data:
         exp_id = r[0]
         worker_id = r[1]
-        start = r[2]
-        end = r[3]
+        start = r[7]
+        end = r[8]
+        answer_treatment = r[12].strip()
+        answer_condition = r[13].strip()
+        query = r[5]
+        if filter_user(worker_id, query, answer_treatment, answer_condition, start, end, r[9], r[11]):
+            continue
+
         if not end:
-            time_spent = get_time_diff_from_actions(dbcursor, exp_id)
+            continue
         else:
             time_spent = get_time_diff(start, end)
 
@@ -106,17 +112,18 @@ def get_paid_workers():
     return paid_workers
 
 
-def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from_batch, to_batch = None, bonus_payment = 0, update_files = True,
-                         ET=None):
+def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from_batch, to_batch = None, bonus_payment = 0, update_files = True):
+
     today = date.today()
 
     workers_to_pay = []
     workers_not_finished = []
-    db = connect_to_db()
+    db = connect_to_db(local=False)
     mycursor = db.cursor()
     bonus_dict = {}
     if bonus_payment:
         bonus_dict = get_bonuses_workers(mycursor,ids_sql_string)
+        print(str(len(bonus_dict)) + ' bonuses')
 
     sql_query_string = "SELECT * FROM serp.user_config where amazon_id in " + ids_sql_string
 
@@ -248,7 +255,7 @@ if __name__ == "__main__":
     #process_batch(18,21)
     #process_batch(22,26)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    process_hit('')
+    process_hit('31D0ZWOD0A0M2LFSUJNWSE2OU5ZA0F')
 
 
 

@@ -76,7 +76,7 @@ def get_data_for_query( query = None, prefix= None):
 
 if __name__ == "__main__":
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    get_data_for_query()
+    get_data_for_query(prefix=3)
     #get_data_for_query()
 
 

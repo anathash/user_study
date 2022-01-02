@@ -99,7 +99,7 @@ class AMT_api:
             OverrideRejection= override_rejection
         )
         if self.check_response(response):
-            print('Accepted assignment' + assignment_id)
+            print('Accepted assignment ' + assignment_id)
         else:
             print('accept_assignment failed for assignment_id: ' + assignment_id)
 
@@ -153,7 +153,9 @@ def pay_bonuses(transaction_file, payemnt_file):
                 #print(response)
 
 
-#if __name__ == "__main__":
+if __name__ == "__main__":
+    api = AMT_api()
+    api.add_assignments_to_hit('3INZSNUD80R2WM6HEPXRBQBNI8CD9A', 30, '3INZSNUD80R2WM6HEPXRBQBNI8CD9A')
     #assign_quals()
 #api = AMT_api()
 #api.get_hit_results('3BPP3MA3TCL2PULQZHB1MHK3IDPELU')
@@ -161,5 +163,3 @@ def pay_bonuses(transaction_file, payemnt_file):
 #pay_bonuses(client, 'C:\\Users\\User\\PycharmProjects\\user_study\\resources\\reports\\Transactions_2021-12-25_to_2021-12-26.csv',
 #            'C:\\Users\\User\\PycharmProjects\\user_study\\resources\\reports\\user_study_payment_report.csv')
 
-api = AMT_api()
-api.add_assignments_to_hit('3INZSNUD80R2WM6HEPXRBQBNI8CD9A', 30, '3INZSNUD80R2WM6HEPXRBQBNI8CD9A')

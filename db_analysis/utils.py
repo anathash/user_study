@@ -18,10 +18,16 @@ test_users_names_prefix = ['anat', 'anst','sharadhi','test', 'tamar','tetst']
 
 EXP_START_DATE = datetime.strptime('12/21/2021, 01:01:31 AM', '%m/%d/%Y, %I:%M:%S %p')
 
-SERVER_URL = "http://cs.virginia.edu/~zw3hk/SERP/"
 
-def connect_to_db(test = False):
-    if test:
+def get_server_url(local = True):
+    if local:
+        return "http://localhost/SERP/"
+    else:
+        return "http://cs.virginia.edu/~zw3hk/SERP/"
+
+
+def connect_to_db(local = True):
+    if local:
         db = mysql.connector.connect(
              host="localhost",
              user="root",
@@ -62,40 +68,64 @@ def get_workers_with_no_link(dbcursor, worker_ids = None):
     users_with_no_links = closed_page.difference(clicked_links)
     return users_with_no_links
 
-def unsatisfactory(query, treatment_answer, condition_answer, time):
+
+def unsatisfactory(query, treatment_answer, condition_answer, time, print_msg):
     if treatment_answer.strip() != TREATMENT_CORRECT_ANSWERS[query]:
-        return True
+        if print_msg:
+            print(treatment_answer + '!=' + TREATMENT_CORRECT_ANSWERS[query] + ' for ' + query)
+        return 'treatment answer error'
     if condition_answer.strip() != CONDITION_CORRECT_ANSWERS[query]:
-        return True
+        if print_msg:
+            print(condition_answer + '!=' + CONDITION_CORRECT_ANSWERS[query] + ' for ' + query)
+        return 'condition_answer answer error'
 
     if time < FILTER_TIME:
-        return True
+        if print_msg:
+            print(str(time) + '<' + str(FILTER_TIME))
+            return 'too quick'
+    return False
+
+
+def print_filter_message(sdt, id, reason, print = False):
+    if print:
+        if sdt > string_to_datetime('12/27/2021, 12:01:31 PM'):
+            print('filter user ' + id +' because ' + reason)
 
 
 def filter_user(user, query, treatment_answer, condition_answer, start,end, prev_know,
-                reason, filter_prev_know = True, filter_exp_start=True):
+                reason, filter_prev_know = True):
     if not end or not start:
-        return True
+        return 'no date'
     sdt = string_to_datetime(start)
     edt = string_to_datetime(end)
     time = get_time_spent(sdt, edt)
-    if filter_exp_start and sdt < EXP_START_DATE:
-        return True
+#    if filter_early and filter_exp_start and sdt < EXP_START_DATE:
+#        print_filter_message(sdt, user,'filter_exp_start and sdt < EXP_START_DATE')
+#        return 'early'
 
     for test_user in test_users_names_prefix:
         if user.lower().startswith(test_user):
-            return True
+            print_filter_message(sdt, user, 'user.lower().startswith(test_user')
+            return 'test'
+
     if not reason or reason == 'None':
-        return True
+        print_filter_message(sdt, user, 'no reason')
+        return 'no reason'
 
     if user in WORKERS_WITH_NO_LINKS:
-        return True
+        print_filter_message(sdt, user, 'no links')
+        return 'no links'
 
-    if unsatisfactory(query, treatment_answer, condition_answer, time):
-        return True
+    #print_msg = sdt > string_to_datetime('12/27/2021, 12:01:31 PM')
+    print_msg = False
+    bad_wok_msg = unsatisfactory(query, treatment_answer, condition_answer, time, print_msg)
+    if bad_wok_msg:
+        print_filter_message(sdt, user, 'unsatisfactory work')
+        return bad_wok_msg
 
     if filter_prev_know and prev_know == 'yes':
-        return True
+        print_filter_message(sdt, user, 'previous knowledge')
+        return 'previous knowledge'
 
     return False
 
@@ -147,6 +177,7 @@ def get_links_stats(dbcursor, worker_ids = None):
     dbcursor.execute(sql_user_action_query_string)
     user_actions = dbcursor.fetchall()
     links_pressed = {}
+
     links = {}
     for l in user_actions:
         user_id = l[0]
@@ -158,17 +189,24 @@ def get_links_stats(dbcursor, worker_ids = None):
         links_pressed[user_id][link_id] = 1
         links[user_id].append({'link_id':link_id,'date':string_to_datetime(t_press)})
     link_times = {}
+    link_orders = {}
     for user, l in links.items():
         links_by_date = sorted(l, key = lambda i: i['date'])
         if user not in link_times:
             link_times[user] = {x: 0 for x in range(0, 11)}
-        for i in range (0, len(links_by_date)-1):
+            link_orders[user] = {x: 0 for x in range(0, 11)}
+        l = len(links_by_date)
+        for i in range (0, l-1):
             rank = links_by_date[i]['link_id']
             date = links_by_date[i]['date']
             next_action = links_by_date[i+1]['date']
             time_diff = get_time_spent(date,next_action, False)
             link_times[user][rank] += time_diff
-    return links_pressed, link_times
+            link_orders[user][i+1] = rank
+        #for order we need the last link as well
+        rank = links_by_date[l-1]['link_id']
+        link_orders[user][l] = rank
+    return links_pressed, link_times, link_orders
 
 
 def get_links_entered_by_worker(dbcursor, worker_ids = None):
