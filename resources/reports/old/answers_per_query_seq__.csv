@@ -1,0 +1,26 @@
+query,seq,count,diff
+Does Ginkgo Biloba treat tinnitus,ANMYNMY,2,1
+Does Ginkgo Biloba treat tinnitus,ANNMMYY,5,0
+Does Ginkgo Biloba treat tinnitus,ANNYYMM,5,0
+Does Ginkgo Biloba treat tinnitus,ANYMNYM,2,2
+Does Ginkgo Biloba treat tinnitus,NMYNMY,3,
+Does Ginkgo Biloba treat tinnitus,NNMMYY,5,
+Does Ginkgo Biloba treat tinnitus,NNYYMM,5,
+Does Ginkgo Biloba treat tinnitus,NYMNYM,4,
+Does Melatonin  treat jetlag,ANMYNMYNMY,2,0
+Does Melatonin  treat jetlag,ANNNMMMYYY,4,1
+Does Melatonin  treat jetlag,ANNNYYYMMM,5,0
+Does Melatonin  treat jetlag,ANYMNYMNYM,3,2
+Does Melatonin  treat jetlag,NMYNMYNMY,2,
+Does Melatonin  treat jetlag,NNNMMMYYY,5,
+Does Melatonin  treat jetlag,NNNYYYMMM,5,
+Does Melatonin  treat jetlag,NYMNYMNYM,5,
+Does Omega Fatty Acids treat Adhd,ANMYNMYNMY,4,1
+Does Omega Fatty Acids treat Adhd,ANNNMMMYYY,4,1
+Does Omega Fatty Acids treat Adhd,ANNNYYYMMM,3,2
+Does Omega Fatty Acids treat Adhd,ANYMNYMNYM,3,0
+Does Omega Fatty Acids treat Adhd,NMYNMYNMY,5,
+Does Omega Fatty Acids treat Adhd,NNNMMMYYY,5,
+Does Omega Fatty Acids treat Adhd,NNNYYYMMM,5,
+Does Omega Fatty Acids treat Adhd,NYMNYMNYM,3,
+,,,10
