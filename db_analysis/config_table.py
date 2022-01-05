@@ -3,6 +3,7 @@ import csv
 import requests
 
 from db_analysis.utils import connect_to_db, get_time_diff, string_to_datetime, filter_user, get_server_url
+from user_behaviour_table import BEHAVIOUR_FILE
 
 MIN_MINUTES_IN_SERP = 2
 
@@ -33,12 +34,12 @@ def get_answers_per_url(dbcursor):
     return answers
 
 
-def set_needed_answers_for_ads(seq_prefix, ad_prefix, local):
+def set_needed_answers_for_ads(seq_prefix, ad_prefix, local, exclude = 'Does Melatonin  treat jetlag'):
     db = connect_to_db(local)
     server_url = get_server_url(local)
     mycursor = db.cursor()
     answer_seq_dict = {}
-    query = 'SELECT URL FROM serp.config_data;'
+    query = "SELECT URL FROM serp.config_data  where query != '" + exclude + "';"
     mycursor.execute(query)
     myresult = mycursor.fetchall()
     for x in myresult:
@@ -47,10 +48,13 @@ def set_needed_answers_for_ads(seq_prefix, ad_prefix, local):
         answer_seq_dict[db_seq] = 0
 
     total = 0
-    with open( '../resources/reports//user_behaviour.csv', newline='', encoding='utf8') as csvf:
+    with open(BEHAVIOUR_FILE, newline='', encoding='utf8') as csvf:
         reader = csv.DictReader(csvf)
         for row in reader:
             url = row['url']
+            if exclude in url:
+                continue
+
             if url not in answer_seq_dict:
                 answer_seq_dict[url] = 0
             answer_seq_dict[url] += 1
@@ -64,9 +68,16 @@ def set_needed_answers_for_ads(seq_prefix, ad_prefix, local):
                 total += count
                 new_seq = ad_prefix + s
                 new_url = server_url + q+'-' +new_seq
-                print('UPDATE serp.config_data set used =0, answered = 0, needed_answers=' + str(count) + " where URL='"+new_url+"';")
+                #print('UPDATE serp.config_data set used =0, answered = 0, needed_answers=' + str(count) + " where URL='"+new_url+"';")
+                print('UPDATE serp.config_data set  needed_answers=' + str(count) + " where URL='"+new_url+"';")
     print(total)
 
+
+def set_need_answers_for_ads():
+    with open('../resources/reports//answers_per_query_seq.csv', newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            url = row['url']
 
 
 def update_config_table(dbcursor):
@@ -84,7 +95,7 @@ if __name__ == "__main__":
 #    db = connect_to_db(test=False)
 #    dbcursor = db.cursor()
 #    update_config_table(dbcursor)
-    set_needed_answers_for_ads(local = False, seq_prefix='Y', ad_prefix='A')
+    set_needed_answers_for_ads(local = False, seq_prefix='M', ad_prefix='S')
 
 
 

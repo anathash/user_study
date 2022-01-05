@@ -44,7 +44,7 @@ def write_to_file(exp_data, filtered_users, limit):
         for row in filtered_users:
             writer.writerow(row)
 
-def process_results(mycursor, results,links,  link_times, link_orders, filter_users = True):
+def process_results(mycursor, results,links,  link_times, link_orders, filter_users = True, add_time_diff_actions = False):
     exp_data = {}
     filtered_users = []
     for x in results:
@@ -58,7 +58,8 @@ def process_results(mycursor, results,links,  link_times, link_orders, filter_us
             time_diff_exp = 0
 
         #        time_diff_actions, time_diff_exp = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
-        time_diff_actions = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
+        if add_time_diff_actions:
+            time_diff_actions = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
 
         # This means that the exp_id was regenerated - so we take the difference between the first clicked link and the end time. This bug should be fixed
         answer_treatment = x[12].strip()
@@ -73,7 +74,10 @@ def process_results(mycursor, results,links,  link_times, link_orders, filter_us
                 continue
 
         time_diff_exp = "%.4f" % round(time_diff_exp, 2)
-        time_diff_actions = "%.4f" % round(time_diff_actions, 2)
+        if add_time_diff_actions:
+            time_diff_actions = "%.4f" % round(time_diff_actions, 2)
+        else:
+            time_diff_actions = 'omit'
 
         treatment_answer_correct = 1 if answer_treatment == TREATMENT_CORRECT_ANSWERS[query] else 0
         condition_answer_correct = 1 if answer_condition == CONDITION_CORRECT_ANSWERS[query] else 0
@@ -108,7 +112,7 @@ def process_results(mycursor, results,links,  link_times, link_orders, filter_us
 #TODO : filter by knowledge?? YES /NO/ ALL
 
 
-def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None, local = True, filter_users = True):
+def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None, local = True, filter_users = True, time_diff_actions = False):
     db = connect_to_db(local)
     mycursor = db.cursor()
     #links = get_links_entered_in_exps(mycursor)
@@ -128,13 +132,13 @@ def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None
 
     exp_data, filter_users = process_results(mycursor=mycursor, results = results,
                                              links=links,  link_times=link_times,
-                                             link_orders=link_orders, filter_users = True)
+                                             link_orders=link_orders, filter_users = filter_users, time_diff_actions = time_diff_actions)
 
     write_to_file(exp_data=exp_data, filtered_users=filter_users, limit=limit)
 
 def get_answer_count(mode = 'url', print_update_query = False, local  = True, prefix = None):
     server_url = get_server_url(local)
-    db = connect_to_db()
+    db = connect_to_db(local)
     mycursor = db.cursor()
     answer_seq_dict = {}
     if prefix:
@@ -226,11 +230,11 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
             config = row['sequence']
             for i in range (1, len(config)+1):
                 link_visibility[i] += 1
-                if 'A' not in config:
+                if 'A' not in config and 'S' not in config:
                     link_visibility_no_ads[i]+=1
 
             if prefix:
-                if config.startswith('A'):
+                if prefix == 1 and (config.startswith('A') or config.startswith('S')):
                     config = config[:(prefix+1)]
                 else:
                     config = config[:prefix]
@@ -349,19 +353,23 @@ def gen_order_rank(filter_field = None, filter_func= None, filter_title = None):
 
 
 if __name__ == "__main__":
+    generate_user_behaviour_table(filter_users=True, local=True, add_time_diff_actions=False)
+    #generate_user_behaviour_table(limit=5, filter_users=True, local=False, add_time_diff_actions=False)
+
     #gen_order_rank(filter_field='sequence', filter_func =  lambda  x: len(x) > 7, filter_title="long_seq")
     #gen_order_rank(filter_field='sequence', filter_func =  lambda  x: 'A' in x, filter_title="only_ads")
     #gen_order_rank(filter_field='sequence', filter_func =  lambda  x: 'A' not in x, filter_title="no_ads")
-    #generate_user_behaviour_table(limit = 5, filter_users = True, local = False)
+
     #get_answer_count(mode='seq')
-    #get_answer_count(mode='url', print_update_query=True, local =False, prefix = 'AM')
+    #get_answer_count(mode='url', print_update_query=True, local =False, prefix = 'S')
 
     #extract_answers_from_behaviour_table()
     #
 
-
+    #extract_answers_from_behaviour_table(prefix=1, filter_title='_xclude_melatonin',
+     #                                    filter_func=lambda x: not x['url'].startswith('Does Melatonin  treat jetlag'))
     #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Ginkgo Biloba treat tinnitus', filter_func  = lambda  x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
     #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Melatonin  treat jetlag', filter_func  = lambda  x: x['url'].startswith('Does Melatonin  treat jetlag'))
     #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Omega Fatty Acids treat Adhd', filter_func  = lambda  x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
-    extract_answers_from_behaviour_table(prefix=1)
+    #extract_answers_from_behaviour_table()
 
