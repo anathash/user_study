@@ -154,8 +154,8 @@ def pay_bonuses(transaction_file, payemnt_file):
 
 
 if __name__ == "__main__":
-    api = AMT_api()
-    api.add_assignments_to_hit('3INZSNUD80R2WM6HEPXRBQBNI8CD9A', 30, '3INZSNUD80R2WM6HEPXRBQBNI8CD9A')
+    api = AMT_api()#19+15+22+7=63
+    api.add_assignments_to_hit('3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T', 7, ' 3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T3')
     #assign_quals()
 #api = AMT_api()
 #api.get_hit_results('3BPP3MA3TCL2PULQZHB1MHK3IDPELU')

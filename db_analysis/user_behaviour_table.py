@@ -1,10 +1,11 @@
 import csv
+import math
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
     TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats, \
     string_to_datetime, get_server_url
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
-BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
+#BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
 
 def write_to_file(exp_data, filtered_users, limit):
 
@@ -112,7 +113,7 @@ def process_results(mycursor, results,links,  link_times, link_orders, filter_us
 #TODO : filter by knowledge?? YES /NO/ ALL
 
 
-def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None, local = True, filter_users = True, time_diff_actions = False):
+def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None, local = True, filter_users = True, add_time_diff_actions = False):
     db = connect_to_db(local)
     mycursor = db.cursor()
     #links = get_links_entered_in_exps(mycursor)
@@ -132,7 +133,7 @@ def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None
 
     exp_data, filter_users = process_results(mycursor=mycursor, results = results,
                                              links=links,  link_times=link_times,
-                                             link_orders=link_orders, filter_users = filter_users, time_diff_actions = time_diff_actions)
+                                             link_orders=link_orders, filter_users = filter_users, add_time_diff_actions = add_time_diff_actions)
 
     write_to_file(exp_data=exp_data, filtered_users=filter_users, limit=limit)
 
@@ -206,8 +207,267 @@ def group_behaviour(metric_field, group_by, output_file_name, csv=None):
         writer = csv.DictWriter(csvfile, filednames)
         writer.writeheader()
 
+def get_filename(prefix, limit):
+    fname = '../resources/reports//' + prefix
+    if limit:
+        fname += '_limit_'+str(limit)
+    fname += '.csv'
+    return fname
 
-def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter_title=None):
+def get_sequence_score(seq, answer):
+    score = 0
+    for i in range(0,len(seq)):
+        if answer == seq[i]:
+            score += 1/(i+1)
+    return score
+
+def get_posterior(seq, answer, links):
+    score = 0
+    for i in range(0,len(seq)):
+        if answer == seq[i]:
+            score += (1/(i+1))*links[i]
+    return score
+
+def get_bucket(score, bucket_step = 1.0):
+    b = score / bucket_step
+    f = bucket_step * (math.floor(b))
+    t = bucket_step * (math.ceil(b))
+    if f == t:
+        f -= bucket_step
+    fp = "%.2f" % f
+    ft = "%.2f" % t
+    return fp + ' to ' + ft
+
+
+def print_seq_to_answers(seq_to_answers, skip_ad, limit):
+    prefix = 'seq_to_answer_skip_ad_' + str(skip_ad)
+    fname = get_filename(prefix, limit)
+    with open(fname,'w',newline='') as outcsv:
+        fieldnames = ['sequence','Y_score','M_score','N_score','NS_score','Y','M','N','NS','Y_count','M_count','N_count','NS_count']
+        writer = csv.DictWriter(outcsv, fieldnames)
+        writer.writeheader()
+        for seq, stats in seq_to_answers.items():
+            sum_answers = sum([x['count'] for x in stats.values()])
+            row = {'sequence': seq}
+            for answer, answer_stats in stats.items():
+                row.update({answer+'_score':answer_stats['score'],answer:answer_stats['count']/sum_answers,answer+'_count':answer_stats['count']})
+            writer.writerow(row)
+
+
+def get_links(row):
+    links = []
+    for i in range (1,11):
+        links.append(row['link'+str(i)])
+    return links
+
+
+def sequence_score_to_answer(limit, buckets = True,  skip_ad = True):
+    fname = get_filename('user_behaviour', limit)
+    seq_to_answers = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            sequence = row['sequence']
+            if sequence not in seq_to_answers:
+                seq_to_answers[sequence] = {}
+                for answer in ['Y','M','N','NS']:
+                    if (sequence.startswith('A') or sequence.startswith('S')) and skip_ad:
+                        score = get_sequence_score(sequence[1:], answer)
+                    else:
+                        score = get_sequence_score(sequence, answer)
+                    seq_to_answers[sequence][answer]= {'score':score,'count':0}
+            feedback = row['feedback']
+            seq_to_answers[sequence][feedback]['count'] += 1
+    if not buckets:
+        print_seq_to_answers(seq_to_answers, skip_ad, limit)
+        return
+    buckets =  {'Y':{},'M':{},'N':{}}
+    for seq, stats in seq_to_answers.items():
+        for answer, answer_stats in stats.items():
+            if answer == 'NS':
+                continue
+            score = answer_stats['score']
+            bucket = score
+            #bucket = get_bucket(score)
+            if bucket not in buckets[answer]:
+                buckets[answer][bucket] = {'Y':0,'M':0,'N':0,'NS':0}
+            for a in ['Y','M','N','NS']:
+                buckets[answer][bucket][a] += stats[a]['count']
+
+
+    prefix = 'seq_score_to_answer_stats_' + str(skip_ad)
+    fname = get_filename(prefix, limit)
+    with open(fname, 'w', newline='') as outcsv:
+        fieldnames = ['Y_score', 'M_score', 'N_score',  'Y', 'M', 'N', 'NS', 'Y_count',
+                      'M_count', 'N_count', 'NS_count']
+        writer = csv.DictWriter(outcsv, fieldnames)
+        writer.writeheader()
+        for answer, answer_scores_dict in buckets.items():
+            for score, stats in answer_scores_dict.items():
+                sum_answers = sum(stats.values())
+                row = {answer + '_score': score}
+                for a, count in stats.items():
+                    row.update({a: count / sum_answers,
+                                a + '_count': count})
+                writer.writerow(row)
+
+
+def is_add(seq):
+    return  seq.startswith('S') or seq.startswith('A')
+
+
+def sequence_score_to_answer_posterior(limit,   skip_ad = True):
+    results = dict()
+    fname = get_filename('user_behaviour', limit)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            config = row['sequence']
+            if config not in results:
+                results[config] = {'Y_score': 0, 'M_score': 0, 'N_score': 0, 'Y': 0, 'N': 0, 'M': 0, 'NS': 0, 'sum_answers': 0, 'links':[0]*10}
+            answer = row['feedback']
+            results[config][answer] += 1
+            results[config]['sum_answers'] += 1
+
+            for i in range(1, 11):
+                link = 'link' + str(i)
+                results[config]['links'][i-1] += int(row[link])
+
+        for seq, stats in results.items():
+            s = seq
+            l = stats['links']
+            if skip_ad and is_add(seq):
+                s = seq[1:]
+                l = l[1:]
+            for answer in ['Y', 'M', 'N']:
+                score = get_posterior(s, answer, l)
+                stats[answer+'_score'] = score
+
+
+        fname = get_filename('sequnce_posterior_stats', limit)
+        with open(fname, 'w', newline='') as csvfile:
+            fieldnames = ['sequence', 'Y_score', 'M_score', 'N_score', 'Y', 'M', 'N', 'NS','max_score','popular_answer','Y_count', 'M_count', 'N_count', 'NS_count', 'sum_answers']
+            for i in range(1, 11):
+                fieldnames.append('link' + str(i))
+
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for config, stats in results.items():
+                row = {'sequence': config}
+                row['sum_answers'] = stats['sum_answers']
+                for answer in ['Y', 'M', 'N']:
+                    row[answer+'_score'] = stats[answer+'_score']
+                    row[answer+'_count'] = stats[answer]
+                    row[answer] = stats[answer]/stats['sum_answers']
+                row['NS_count'] = stats['NS']
+                row['NS'] = stats['NS']/stats['sum_answers']
+
+                row['max_score'] = get_max_key({'Y': row['Y_score'], 'M': row['M_score'], 'N': row['N_score']})
+                row['popular_answer'] = get_max_key({'Y': row['Y'], 'M': row['M'], 'N': row['N']})
+
+                for i in range(1, 11):
+                    row['link' + str(i)] = stats['links'][i-1]
+                writer.writerow(row)
+
+
+def get_max_key(dict):
+    s = sorted(dict.items(), key=lambda kv: kv[1], reverse=True)
+    return s[0][0]
+
+def get_first_rank(seq, answer):
+    for i in range(0, len(seq)):
+        if answer == seq[i]:
+            return 1 / (i + 1)
+
+
+def sequence_score_to_answer_stats(limit=None, ad_prefix = None):
+    fname = get_filename('user_behaviour', limit)
+    seq_to_answers = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            sequence = row['sequence']
+            feedback = row['feedback']
+            if not sequence in seq_to_answers:
+                seq_to_answers
+            if ad_prefix:
+                if (not sequence.startswith(ad_prefix)):
+                    continue
+                #score = get_sequence_score(sequence[1:], answer)
+                score = get_first_rank(sequence[1:], answer)
+            else:
+                if sequence.startswith('S') or sequence.startswith('A'):
+                    continue
+                #score = get_sequence_score(sequence, answer)
+                score = get_first_rank(sequence[1:], answer)
+            #bucket = get_bucket(score)
+            bucket = "%.2f" % score
+
+            if bucket not in seq_to_answers:
+                seq_to_answers[bucket] = {'Y':{},'M':{},'N':{}}
+            for answer in ['Y','M','N','NS']:
+                seq_to_answers[bucket][answer] += 1
+    if not ad_prefix:
+        ad_prefix = 'no_ads'
+    prefix = 'seq_to_answer_'+ ad_prefix
+    fname = get_filename(prefix, limit)
+    with open(fname,'w',newline='') as outcsv:
+        fieldnames = ['score','Y','M','N','NS','Y_count','M_count','N_count']
+        writer = csv.DictWriter(outcsv, fieldnames)
+        writer.writeheader()
+        for s, stats in seq_to_answers.items():
+            sum_answers = sum(stats.values())
+            row = {'score': s, 'Y_count':stats['Y'], 'M_count':stats['M'], 'N_count':stats['N'],
+                   'Y':stats['Y']/sum_answers, 'M':stats['M']/sum_answers, 'N':stats['N']/sum_answers}
+            writer.writerow(row)
+
+
+def sequence_scores(limit=None, skip_ads = True, print_latex = True):
+    fname = get_filename('user_behaviour', limit)
+    seq_to_answers = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            sequence = row['sequence']
+            if is_add(sequence):
+                continue
+            if sequence not in seq_to_answers and skip_ads:
+                seq_to_answers[sequence] = {}
+                answer_scores = {}
+                for answer in ['Y','M','N']:
+                    answer_scores[answer] = get_sequence_score(sequence, answer)
+                sum_answers = sum(answer_scores.values())
+                for answer in ['Y','M','N']:
+                    seq_to_answers[sequence][answer] = answer_scores[answer] / sum_answers
+                sorted_scored = sorted(seq_to_answers[sequence].items(), key=lambda kv: kv[1], reverse=True)
+                seq_to_answers[sequence]['arg_max']  = sorted_scored[0][0]
+    if print_latex:
+        colors = {'Y':'00FF00','M': 'FFFF00','N':'FF0000'}
+        for answer in ['Y', 'M', 'N']:
+            seqs = {x:y for x,y in seq_to_answers.items() if y['arg_max'] == answer}
+            sorted_seqs = dict(sorted(seqs.items(), key=lambda kv: kv[1][answer], reverse=True))
+            for s, scores in sorted_seqs.items():
+                y = round(scores['Y'], 2)
+                m = round(scores['M'], 2)
+                n = round(scores['N'], 2)
+                if (y+m+n) != 1:
+                    print("(y+m+n) !=  1 :" + str(y+m+n))
+                print('\\rowcolor[HTML]{'+colors[answer]+'}')
+                str = s + "&{:.2f}&{:.2f}&{:.2f} \\\\".format(y, m, n)
+                print(str)
+                print('\hline')
+    return
+
+    fname = get_filename('sequence_to_score', limit)
+    with open(fname,'w',newline='') as outcsv:
+        fieldnames = ['sequence','Y','M','N']
+        writer = csv.DictWriter(outcsv, fieldnames)
+        writer.writeheader()
+        for seq, scores in seq_to_answers.items():
+            row = {'sequence': seq, 'Y':scores['Y'], 'M':scores['M'], 'N':scores['N']}
+            writer.writerow(row)
+
+def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter_title=None, limit = None):
     results = dict()
     possible_answers = set()
     filename = "feedback_all"
@@ -215,12 +475,18 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
         filename += '_prefix_'+str(prefix)
     if filter_title:
         filename += '_'+filter_title
-    filename += '.csv'
     link_visibility = {x:0 for x in range(1,11)}
     link_visibility_no_ads = {x:0 for x in range(1,11)}
+    link_visibility_S = {x: 0 for x in range(1, 11)}
+    link_visibility_SM = {x: 0 for x in range(1, 11)}
+    link_visibility_SN = {x: 0 for x in range(1, 11)}
+    link_visibility_A = {x: 0 for x in range(1, 11)}
+    link_visibility_AM = {x: 0 for x in range(1, 11)}
+    link_visibility_AN = {x: 0 for x in range(1, 11)}
 
     results['sum_links'] = {'link' + str(i) :0 for i in range(1,11)}
-    with open(BEHAVIOUR_FILE, newline='', encoding='utf8') as csvf:
+    fname = get_filename('user_behaviour', limit)
+    with open(fname, newline='', encoding='utf8') as csvf:
         reader = csv.DictReader(csvf)
         for row in reader:
             if filter_title:
@@ -230,8 +496,22 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
             config = row['sequence']
             for i in range (1, len(config)+1):
                 link_visibility[i] += 1
-                if 'A' not in config and 'S' not in config:
+                if config.startswith('A'):
+                    link_visibility_A[i] += 1
+                    if config.startswith('AM'):
+                        link_visibility_AM[i] += 1
+                    if config.startswith('AN'):
+                        link_visibility_AN[i] += 1
+
+                elif config.startswith('S'):
+                    link_visibility_S[i] += 1
+                    if config.startswith('SM'):
+                        link_visibility_SM[i] += 1
+                    if config.startswith('SN'):
+                        link_visibility_SN[i] += 1
+                else:
                     link_visibility_no_ads[i]+=1
+
 
             if prefix:
                 if prefix == 1 and (config.startswith('A') or config.startswith('S')):
@@ -270,8 +550,15 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
 
         results['link_visibility'] = {'link' + str(x): link_visibility[x] for x in range(1,11) }
         results['link_visibility_no_ads'] = {'link' + str(x): link_visibility_no_ads[x] for x in range(1,11) }
+        results['link_visibility_A'] = {'link' + str(x): link_visibility_A[x] for x in range(1,11) }
+        results['link_visibility_AM'] = {'link' + str(x): link_visibility_AM[x] for x in range(1, 11)}
+        results['link_visibility_AN'] = {'link' + str(x): link_visibility_AN[x] for x in range(1, 11)}
+        results['link_visibility_S'] = {'link' + str(x): link_visibility_S[x] for x in range(1,11) }
+        results['link_visibility_SM'] = {'link' + str(x): link_visibility_SM[x] for x in range(1,11) }
+        results['link_visibility_SN'] = {'link' + str(x): link_visibility_SN[x] for x in range(1,11) }
 
-        with open('../resources/reports//' + filename, 'w', newline='') as csvfile:
+        fname = get_filename(filename, limit)
+        with open(fname, 'w', newline='') as csvfile:
             fieldnames = ['sequence'] + ['Y','M','N','NS','sum_answers']
             for i in range(1, 11):
                 fieldnames.append('link' + str(i))
@@ -287,11 +574,12 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
                 writer.writerow(row)
 
 
-def gen_rank_order(filter_field = None, filter_func= None, filter_title = None):
+def gen_rank_order(limit, filter_field = None, filter_func= None, filter_title = None, ):
     orders = {}
     for i in range(1, 11):
         orders[i] = {'pressed_'+str(i): 0 for i in range(1, 11)}
-    with open(BEHAVIOUR_FILE, newline='', encoding='utf8') as csvf:
+    fname = get_filename('user_behaviour', limit)
+    with open(fname, newline='', encoding='utf8') as csvf:
         reader = csv.DictReader(csvf)
         for row in reader:
             if filter_field and not filter_func(row[filter_field]):
@@ -322,6 +610,7 @@ def gen_order_rank(filter_field = None, filter_func= None, filter_title = None):
     orders = {}
     for i in range(1, 11):
         orders[i] = {'rank_' + str(i): 0 for i in range(1, 11)}
+
     with open(BEHAVIOUR_FILE, newline='', encoding='utf8') as csvf:
         reader = csv.DictReader(csvf)
         for row in reader:
@@ -351,9 +640,40 @@ def gen_order_rank(filter_field = None, filter_func= None, filter_title = None):
             writer.writerow(row)
 
 
+def get_user_data(limit = 5):
+    db = connect_to_db(local=True)
+    mycursor = db.cursor()
+    fname = get_filename('user_behaviour', limit)
+    users = set()
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            user = row['WorkerId'].strip()
+            users.add(user)
+    query = 'SELECT * FROM serp.user_data;'
+    mycursor.execute(query)
+    results = mycursor.fetchall()
+    fname =  get_filename('user_data', limit)
+    with open(fname, 'w', newline='') as csvfile:
+        fieldnames = ['user_id','age','gender','education_level','education_field']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for x in results:
+            uid = x[0].strip()
+            if uid in users:
+                writer.writerow({'user_id':x[0],'age':x[1],'gender':x[2],'education_level':x[3],'education_field':x[4]})
+
+
+
 
 if __name__ == "__main__":
-    generate_user_behaviour_table(filter_users=True, local=True, add_time_diff_actions=False)
+    get_user_data()
+    #sequence_scores()
+    #sequence_score_to_answer(limit= 5, buckets=False, skip_ad=True)
+    #sequence_score_to_answer_posterior(limit= 5)
+    #generate_user_behaviour_table(filter_users=True, local=False, limit = 5, add_time_diff_actions=True)
+    #generate_user_behaviour_table(filter_users=True, local=False,  add_time_diff_actions=True)
+    #extract_answers_from_behaviour_table(prefix = 2, limit = None)
     #generate_user_behaviour_table(limit=5, filter_users=True, local=False, add_time_diff_actions=False)
 
     #gen_order_rank(filter_field='sequence', filter_func =  lambda  x: len(x) > 7, filter_title="long_seq")
@@ -363,7 +683,7 @@ if __name__ == "__main__":
     #get_answer_count(mode='seq')
     #get_answer_count(mode='url', print_update_query=True, local =False, prefix = 'S')
 
-    #extract_answers_from_behaviour_table()
+    extract_answers_from_behaviour_table(prefix = 1, limit=5)
     #
 
     #extract_answers_from_behaviour_table(prefix=1, filter_title='_xclude_melatonin',
@@ -371,5 +691,5 @@ if __name__ == "__main__":
     #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Ginkgo Biloba treat tinnitus', filter_func  = lambda  x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
     #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Melatonin  treat jetlag', filter_func  = lambda  x: x['url'].startswith('Does Melatonin  treat jetlag'))
     #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Omega Fatty Acids treat Adhd', filter_func  = lambda  x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
-    #extract_answers_from_behaviour_table()
+
 

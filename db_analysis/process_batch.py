@@ -112,7 +112,7 @@ def get_paid_workers():
     return paid_workers
 
 
-def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from_batch, to_batch = None, bonus_payment = 0, update_files = True):
+def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from_batch, to_batch = None, bonus_payment = 0, update_files = False):
 
     today = date.today()
 
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     #process_batch(18,21)
     #process_batch(22,26)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    process_hit('31D0ZWOD0A0M2LFSUJNWSE2OU5ZA0F')
+    process_hit('3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T')
 
 
 

@@ -82,7 +82,7 @@ def unsatisfactory(query, treatment_answer, condition_answer, time, print_msg):
     if time < FILTER_TIME:
         if print_msg:
             print(str(time) + '<' + str(FILTER_TIME))
-            return 'too quick'
+        return 'too quick'
     return False
 
 
