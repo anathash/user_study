@@ -525,6 +525,7 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
                 for i in range(1, 11):
                     results[config]['link' + str(i)] = 0
                     results[config+'_NORM']['link' + str(i)] = 0
+                results[config]['link1 + link2'] = 0
             answer = row['feedback']
             results[config][answer] += 1
             results[config]['sum_answers'] += 1
@@ -532,6 +533,8 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
             for i in range(1,11):
                 link = 'link' + str(i)
                 results[config][link] += int(row[link])
+            if row['link1'] == '1' and row['link2'] =='1':
+                results[config]['link1 + link2'] +=1
 
         for config in results.keys():
             if config.startswith('link') or 'NORM' in config or config == 'sum_links':
@@ -559,9 +562,10 @@ def extract_answers_from_behaviour_table(prefix = None, filter_func=None, filter
 
         fname = get_filename(filename, limit)
         with open(fname, 'w', newline='') as csvfile:
-            fieldnames = ['sequence'] + ['Y','M','N','NS','sum_answers']
+            fieldnames = ['sequence'] + ['Y','M','N','NS','sum_answers','link1 + link2']
             for i in range(1, 11):
                 fieldnames.append('link' + str(i))
+
 
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
@@ -667,7 +671,7 @@ def get_user_data(limit = 5):
 
 
 if __name__ == "__main__":
-    get_user_data()
+    #get_user_data()
     #sequence_scores()
     #sequence_score_to_answer(limit= 5, buckets=False, skip_ad=True)
     #sequence_score_to_answer_posterior(limit= 5)
