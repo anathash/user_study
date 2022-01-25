@@ -4,14 +4,16 @@ from math import log
 import numpy
 import scipy
 import statsmodels.api as sm
+from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from statsmodels.formula.api import ols
+from statsmodels.stats.contingency_tables import mcnemar
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 import numpy as np
 import scipy.stats as stats
 
 import pandas as pd
-from scipy.stats import chisquare, chi2_contingency
+from scipy.stats import chisquare, chi2_contingency, fisher_exact, power_divergence
 
 
 def anova_from_file(fname, metric_field, group_by):
@@ -249,30 +251,91 @@ def decision_diff():
     #decision_diff_two_way(y1=17, m1=23, n1=12, y2=13, m2=12, n2=7, c1_c2_group_index = 'M_SM')
 
 
-def chi_cont(r1,r2):
-    results = [r1, r2]
+def chi_negative_bias():
+    results = [[10, 20, 17], [11, 18, 23], [7, 7, 17]]
+    chi_cont(results)
+
+
+def chi_inconclusive_bias():
+    results = [[17, 23, 12], [16, 24, 12], [13,12,7]]
+    chi_cont(results)
+
+def chi_cont(results, row_index, col_index=['Y','M','N']):
+  #  results = [r1, r2]
     F = np.array(results)
-    table = sm.stats.Table(F)
+
+
+   # ddsr, p = fisher_exact(F, alternative='two-sided')
+   # print('Fisher:'+ str(p))
+    df = pd.DataFrame(data=F, index=row_index, columns=col_index)
+
+
+    table = sm.stats.Table(df)
+
+
+  #  print('table.cumulative_oddsratios')
+  #  print(table.cumulative_oddsratios)
+
+    print('table.chi2_contribs')
+    print(table.chi2_contribs)
+
+
+    #print('table.local_oddsratios')
+    #print(table.local_oddsratios)
+  #  print(table)
+
+
+
+#    print('resid_pearson Residuals')
+
+
     print(table)
+    print('resid_pearson Residuals')
+    print(table.resid_pearson)
+    print('standardized_resids Residuals')
+    print(table.standardized_resids)
 
     obs = np.array(results)
     t = chi2_contingency(obs)
+
+
+
     print('test statistics:' + str(t[0]))
     print('p-value:' + str(t[1]))
     print('df ' + str(t[2]))
     print('expected' + str(t[3]))
 
+
+    r = power_divergence(obs, lambda_="log-likelihood")
+    print('power_divergence')
+    print(r)
+
+    t = sm.stats.Table2x2(np.array(df))
+    print(t.summary())
+
 def chi_no_ads():
     results = [[26,13,10], [17,23,12],[10,20,17]]
-    F = np.array(results)
-    table = sm.stats.Table(F)
-    print(table.resid_pearson)
-    obs = np.array(results)
-    t = chi2_contingency(obs)
-    print('test statistics:' + str(t[0]))
-    print('p-value:' + str(t[1]))
-    print('df' + str(t[2]))
-    print('expected' + str(t[3]))
+    chi_cont(results)
+
+
+def chi_all():
+    results = [[26, 13, 10], [17, 23, 12], [10, 20, 17], [16, 24, 12], [11, 18, 23], [13, 12, 7], [7, 7, 17]]
+    chi_cont(results, col_index=['Y','M','N'], row_index=['Y','M','N','AM','AN','SM','SN'])
+
+
+def query_chi():
+    #meltaonin,omega,ginko
+
+    y_results = [[8,5,4],[12,3,5],[6,5,1]]
+    m_results = [[5,7,5],[7,8,4],[5,8,3]]
+    n_results = [[7, 5, 4], [0, 8, 7], [3, 7, 6]]
+    print('y results')
+    chi_cont(y_results)
+    print('m_results')
+    chi_cont(m_results)
+    print('n_results')
+    chi_cont(n_results)
+
 
 def chi_tests():
     sn_norm = [0.225,0.225,0.55]
@@ -280,10 +343,10 @@ def chi_tests():
     dummy_sn = [x*80 for x in sn_norm]
     dummy_n = [x * 70 for x in n_norm]
     print('SN-N')
-    chi_cont([10, 20, 17], [7, 7, 17])
+    chi_cont([[10, 20, 17], [7, 7, 17]])
     #chi_cont([14,  17], [37,  10])
     print('SN-N-dummy')
-    chi_cont([10, 20, 17], dummy_sn)
+    chi_cont([[10, 20, 17], dummy_sn])
     #chi_cont(dummy_n, dummy_sn)
 
 
@@ -298,6 +361,72 @@ def chi_tests():
     dummy_m = [x*100 for x in m_norm]
   #  chi_cont([21, 20, 11], dummy_sm)
     chi_cont(dummy_m, dummy_sm)
+
+
+def threeway_log_linear_models():
+    df = pd.read_csv('../resources/reports/responses_per_sequnce.csv')
+    print(df)
+    #columnsNamesArr = df.columns.values
+    #rowNamesArr = df.rows.values
+    Xtrain = []
+    Ytrain = []
+    rows = len(df.index)
+    columns = 3 # 3 possible answers
+    expected = []
+    ad_config = []
+    total = 0
+    #generating expected table vals
+    for i in range(0, rows):
+        l = list(df.iloc[i])
+        ad_c = df.iloc[i, 0][0]
+        if ad_c == 'A':
+            ad_config.append(rows+columns+2)
+        elif ad_c == 'S':
+            ad_config.append(rows+columns+3)
+        else:
+            ad_config.append(rows+columns +1)
+
+
+
+        row_sum = sum(l[1:])
+        total +=row_sum
+        row = []
+
+        for j in range(0, columns):
+            c_vals = list(df.iloc[:, j+1])
+            col_sum = sum(c_vals)
+            row.append(row_sum*col_sum)
+        expected.append(row)
+
+    for i in range(0, rows):
+        for j in range(0, columns):
+            expected[i][j] =expected[i][j]/total
+
+    for i in range(0,rows):
+        for j in range(0,columns):
+            x = [0]*(rows+columns+3)
+            x[i]=1
+            x[j+rows]=1
+            x[ad_config[i]] = 1
+            Xtrain.append(x)
+            Ytrain.append(log(expected[i][j]))
+
+            #Ytrain.append(expected[i][j])
+    print(Xtrain)
+    print(Ytrain)
+    #print([log(y) for y in Ytrain])
+    #Y = np.array([log(y) for y in Ytrain])
+    X = np.array(Xtrain)
+    Y = np.array(Ytrain)
+    reg = LinearRegression().fit(X,Y )
+    print(str(reg.intercept_))
+    print(str(reg.coef_))
+
+    X = sm.add_constant(X)  # adding a constant
+
+    model = sm.OLS(Y, X).fit()
+    print(model.params)
+    print(model.summary())
 
 
 def log_linear_models(sequences = None):
@@ -318,6 +447,7 @@ def log_linear_models(sequences = None):
     columns = 3 # 3 possible answers
     expected = []
     total = 0
+    #generating expected table vals
     for i in range(0, rows):
         l = list(df.iloc[i])
         row_sum = sum(l[1:])
@@ -346,9 +476,9 @@ def log_linear_models(sequences = None):
     #Y = np.array([log(y) for y in Ytrain])
     X = np.array(Xtrain)
     Y = np.array(Ytrain)
-    reg = LinearRegression().fit(X,Y )
+    reg = LinearRegression().fit(X,Y)
     print(str(reg.intercept_))
-    print( str(reg.coef_))
+    print(str(reg.coef_))
 
     X = sm.add_constant(X)  # adding a constant
 
@@ -356,9 +486,176 @@ def log_linear_models(sequences = None):
     print(model.params)
     print(model.summary())
 
+
+def chi_no_melatonin():
+    print('SN-N')
+    chi_cont([[3, 15, 13], [7, 7, 17]])
+    # chi_cont([14,  17], [37,  10])
+
+    print('SM-M')
+    chi_cont([[13, 12, 7], [12, 16, 7]])
+
+
+def chi_user_bias():
+    n_results = [[37,10],[29,23],[14,17]]
+    chi_cont(n_results)
+    m_results = [[7,12,23],[16,12,24],[13,7,12]]
+    chi_cont(m_results)
+
+
+def two_by_two_test():
+    print('#Y/M-SM')
+    chi_cont([[17,23+12],[13,12+7]],row_index=['M','SM'], col_index=['Y','N+M'])
+
+    print('#M/M-SM')
+    res = np.array([[23,17+12],[12,13+7]]) #M/M-SM
+    chi_cont([[23,17+12],[12,13+7]], row_index=['M', 'SM'], col_index=['M', 'N+Y'])
+
+
+    print('#N/M-SM')
+    chi_cont([[12,17+23],[7,13+12]], row_index=['M', 'SM'], col_index=['N', 'M+Y'])
+
+
+    print('#Y/N-SN')
+    chi_cont([[10,20+17],[7,7+17]], row_index=['N', 'SN'], col_index=['Y', 'N+M'])
+
+
+    print('#M/N-SN')
+    chi_cont([[20,10+17],[7, 7+17]], row_index=['N', 'SN'], col_index=['M', 'Y+N'])
+
+    print('#N/N-SN')
+    chi_cont([[17,20+10],[17,7+7]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+
+    print('#N/N-AN')
+    chi_cont([[17,20+10],[23,11+18]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+
+    #res = np.array([[,17+12],[24,16+12]]) #N/M-AM
+
+
+
+def odds_ratio_tests():
+    print('#Y/M-SM')
+    scale = 70
+    ym = [17 /(23+12+17),(23+12)/(23+12+17)]
+    ysm = [13 /(13+12+7),(7+12)/(13+12+17)]
+
+    ym = [x * scale for x in ym]
+    ysm = [x * scale for x in ysm]
+
+    #res = np.array([[17,23+12],[13,12+7]]) #Y/M-SM
+    res = np.array([ym,ysm])  # Y/M-SM
+    t = sm.stats.Table2x2(res)
+    print(t.summary())
+
+
+    print('#M/M-SM')
+    res = np.array([[23,17+12],[12,13+7]]) #M/M-SM
+    t = sm.stats.Table2x2(res)
+    print(t.summary())
+
+    print('#N/M-SM')
+    res = np.array([[12,17+23],[7,13+12]]) #N/M-SM
+    t = sm.stats.Table2x2(res)
+    print(t.summary())
+
+
+    print('#Y/N-SN')
+    res = np.array([[10,20+17],[7,7+17]]) #Y/N-SN
+    t = sm.stats.Table2x2(res)
+    print(t.summary())
+
+    print('#M/M-SM')
+
+    res = np.array([[20,10+17],[7, 7+17]]) #M/N-SN
+    t = sm.stats.Table2x2(res)
+    print(t.summary())
+
+    print('#N/M-SM')
+    #res = np.array([[17,20+10],[17,7+7]]) #N/N-SN
+    nm = [17/47,30/47]
+    nsm = [17/31,14/31]
+    scale = 60
+    m = [x*scale for x in nm]
+    ms = [x*scale for x in nsm]
+    res = np.array([m,ms]) #N/N-SN
+    #res = np.array([[17,20+10],[17,7+7]]) #N/N-SN
+    t = sm.stats.Table2x2(res)
+    print(t.summary())
+
+    #res = np.array([[,17+12],[24,16+12]]) #N/M-AM
+
+
+def cont_exp(scale):
+     nn = [0.36, 0.64]
+     nsn = [0.54, 0.46]
+     #chi_cont([[17, 20 + 10], [17, 7 + 7]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+     #res = [[x * 50 for x in nn], [x * scale for x in nsn]]
+     res = [[17, 20 + 10], [x * scale for x in nsn]]
+     chi_cont(res, row_index=['N', 'SN'], col_index=['N','Y+M'])
+     t = sm.stats.Table2x2(np.array(res))
+     print(t.summary())
+
+     mp = [0.33,0.67]
+     smp = [0.4,0.6]
+     res = [[x*scale for x in mp],[x*scale for x in smp]]
+     chi_cont(res, row_index=['M','SM'], col_index=['Y','N+M'])
+     t = sm.stats.Table2x2(np.array(res))
+     print(t.summary())
+
+
+#    n = [0.21,0.43,0.36]
+#    sn = [0.23,0.23,0.54]
+#    res = [[x*scale for x in n],[x*scale for x in sn]]
+#    chi_cont(res, row_index=['N','SN'])
+#    m = [0.33,0.44,0.23]
+#    sm = [0.41,0.375,0.22]
+#    res = [[x*scale for x in m],[x*scale for x in sm]]
+#    chi_cont(res, row_index=['M','SM'])
+
 if __name__ == "__main__":
+    clusters = [[0.40625,0.375,0.21875],
+                [0.233,0.25,0.483],
+                [0.43,0.32,0.25],
+                [0.11,0.77,0.11],
+                [0.3,0.45,0.22],
+                [0.33,0.167,0.44],
+                [0.17,0.75,0.08],
+                [0.55,0.09,0.27],
+                [0.211,0.34,0.44],
+                [0.2,0.5,0.3],
+                [0.46,0.15,0.38],
+                [0.54,0.33,0.12],
+                [0.36,0.27,0.36]]
+    kmeans = KMeans(n_clusters=4, random_state=0).fit(np.array(clusters))
+    print(kmeans.labels_)
+#    print('#N/N-SN')
+#    res = chi2_contingency([[16,20,20],[11,18,23]])
+
+
+
+    #print(res)
+    #chi_cont([[0.34*70, (1-0.34)*70], [35, 35]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+    #chi_cont([[36,  20], [29, 29]], row_index=['N', 'SN'], col_index=['N', '!N'])
+    #chi_cont([[16, 20, 20], [14, 15, 29]], row_index=['N', 'SN'], col_index=['Y', 'M', 'N'])
+    #chi_cont([[20, 20 + 16], [40, 40]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+    #chi_cont([[0.34*80, 0.66*80], [0.5*80, 0.5*80]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+
+    #chi_cont([[18, 26 + 13], [13, 12 + 7]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
+  #  chi_cont([[17, 20 + 10], [35, 25]], row_index=['N', 'SN'], col_index=['N', 'Y+M'])
+    #cont_exp(70)
+
+    #two_by_two_test()
+    #odds_ratio_tests()
+    #threeway_log_linear_models()
+    #chi_user_bias()
+    #chi_all()
+    #chi_negative_bias()
+    #chi_inconclusive_bias()
+    #chi_inconclusive_bias()
     #chi_no_ads()
-    chi_tests()
+    #chi_tests()
+    #query_chi()
+    #chi_no_melatonin()
     #log_linear_models(sequences = ['N','SN'])
     #log_linear_models(sequences = ['M','SM'])
     #log_linear_models()

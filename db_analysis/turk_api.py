@@ -43,6 +43,8 @@ class AMT_api:
             print('get_hit_status failed for hit: ' + hit_id)
         return response['HIT']['NumberOfAssignmentsPending'] == 0
 
+
+
     def get_hit_results(self, hit_id):
         response = self.client.list_assignments_for_hit(
             HITId=hit_id,

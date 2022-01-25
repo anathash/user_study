@@ -217,6 +217,18 @@ def process_hit(hit_id):
     amazon_results, ids_sql_string = get_worker_id_list_for_hit(api, hit_id)
     process_survery_code(api, amazon_results, ids_sql_string, payment, hit_id, bonus, True)
 
+def assign_qual():
+    hit_id = '3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T'
+    api = AMT_api()
+    response = api.client.list_assignments_for_hit(
+        HITId=hit_id,
+        #            NextToken='string',
+        MaxResults=100,
+        AssignmentStatuses=['Approved']
+    )
+    for r in response['Assignments']:
+        api.assign_serp_qualification(r['WorkerId'])
+
 
 def process_batch(from_batch, to_batch=None):
     payment = 1.4
@@ -250,12 +262,13 @@ def add_assignemnts(num):
 
 
 if __name__ == "__main__":
+    #assign_qual()
     #add_assignemnts(5)
     #print_workers_with_no_links()
     #process_batch(18,21)
     #process_batch(22,26)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    process_hit('3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T')
+    process_hit('3UDTAB6HH608X25N2D9WWJR4P3Q09W')
 
 
 

@@ -671,13 +671,16 @@ def get_user_data(limit = 5):
 
 
 if __name__ == "__main__":
+    generate_user_behaviour_table(filter_users=True, local=False, add_time_diff_actions=True)
+    extract_answers_from_behaviour_table(prefix=1, limit=None)
+    #extract_answers_from_behaviour_table(prefix=2, limit=None)
     #get_user_data()
     #sequence_scores()
     #sequence_score_to_answer(limit= 5, buckets=False, skip_ad=True)
     #sequence_score_to_answer_posterior(limit= 5)
-    #generate_user_behaviour_table(filter_users=True, local=False, limit = 5, add_time_diff_actions=True)
+
     #generate_user_behaviour_table(filter_users=True, local=False,  add_time_diff_actions=True)
-    #extract_answers_from_behaviour_table(prefix = 2, limit = None)
+
     #generate_user_behaviour_table(limit=5, filter_users=True, local=False, add_time_diff_actions=False)
 
     #gen_order_rank(filter_field='sequence', filter_func =  lambda  x: len(x) > 7, filter_title="long_seq")
@@ -687,13 +690,13 @@ if __name__ == "__main__":
     #get_answer_count(mode='seq')
     #get_answer_count(mode='url', print_update_query=True, local =False, prefix = 'S')
 
-    extract_answers_from_behaviour_table(prefix = 1, limit=5)
+    #extract_answers_from_behaviour_table(prefix = 1, limit=5)
     #
 
-    #extract_answers_from_behaviour_table(prefix=1, filter_title='_xclude_melatonin',
-     #                                    filter_func=lambda x: not x['url'].startswith('Does Melatonin  treat jetlag'))
-    #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Ginkgo Biloba treat tinnitus', filter_func  = lambda  x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
-    #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Melatonin  treat jetlag', filter_func  = lambda  x: x['url'].startswith('Does Melatonin  treat jetlag'))
-    #extract_answers_from_behaviour_table(prefix=1, filter_title = 'Does Omega Fatty Acids treat Adhd', filter_func  = lambda  x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    #extract_answers_from_behaviour_table(prefix=1, limit = 5, filter_title='_xclude_melatonin',
+    #                                     filter_func=lambda x: not x['url'].startswith('Does Melatonin  treat jetlag'))
+    #extract_answers_from_behaviour_table(prefix=1, limit = 5, filter_title = 'Does Ginkgo Biloba treat tinnitus', filter_func  = lambda  x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+    #extract_answers_from_behaviour_table(prefix=1, limit = 5,  filter_title = 'Does Melatonin  treat jetlag', filter_func  = lambda  x: x['url'].startswith('Does Melatonin  treat jetlag'))
+    #extract_answers_from_behaviour_table(prefix=1, limit = 5,  filter_title = 'Does Omega Fatty Acids treat Adhd', filter_func  = lambda  x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
 
 

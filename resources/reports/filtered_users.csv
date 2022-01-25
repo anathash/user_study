@@ -1,6 +1,7 @@
 WorkerId,Filter Reason
 A3GM6577HMA0QB,condition_answer answer error
 A3IXNJ9U7IGIRS,no reason
+A31GTPGWHQVS9B,treatment answer error
 A34OMRGRGD22T0,condition_answer answer error
 A3AIRKDB2DMC7U,treatment answer error
 A3U2LC48LNWXY1,previous knowledge
@@ -33,7 +34,10 @@ A1B57W9Y3Q93OV,treatment answer error
 A3BFURSMQ03Q7W,treatment answer error
 ALNY6I2MH2KJ1,condition_answer answer error
 AK7AUAPMVN0H2,previous knowledge
+A2ICP7BP6O2RRE,treatment answer error
+A3SQFBCICW2RLB,previous knowledge
 ASH4NI9G4222K,previous knowledge
+AXKVHJHF1EOVT,treatment answer error
 A259OBKPBBIOAJ,treatment answer error
 A2LV5432PV1S39,treatment answer error
 A3GF0U18Q42H8T,previous knowledge
@@ -47,14 +51,18 @@ A9S2WOGQ2ZOO1,previous knowledge
 A1C51A1VY9QTTU,previous knowledge
 AIV1PB1IW69JH,no date
 A11QVZD5ECPL2R,treatment answer error
+A3CD3C99T8S6ON,previous knowledge
 AD1ILDUXZHASF,too quick
 A2PH5T3HCCCXIN,too quick
 A3P4SKOC7NIXZP,treatment answer error
 A1KUWYYY2YU0CI,previous knowledge
 A3588JV6EB95AZ,previous knowledge
 A3QJ9UT0247YEJ,previous knowledge
+A2OE9VTZFMFZJY,previous knowledge
+APFGEIA25Y2IN,previous knowledge
 A85URORY8M8PY,previous knowledge
 A3SITQVLF6JA08,treatment answer error
+A3TS3ZKMHWF7F7,previous knowledge
 ATKHPD0KLHLO9,treatment answer error
 AYT6G75JNE3OH,treatment answer error
 AT8A9XACJK1UR,previous knowledge
@@ -64,6 +72,7 @@ A305H0T7WW2SOA,previous knowledge
 A293754WKYHGBT,previous knowledge
 A2U481IF2121QP,previous knowledge
 A32W5S5JWI020D,treatment answer error
+AV1OKX807QH9H,previous knowledge
 A1TEXCUTI4IUUN,previous knowledge
 A3LTGXX5HIYDBM,too quick
 A2YQD3FO7R5I7K,condition_answer answer error
@@ -72,12 +81,15 @@ A24Z3TFXQB0GDP,condition_answer answer error
 ATKG4FI2S5MVL,treatment answer error
 AZ0F8SS8884VC,previous knowledge
 A2C8MIOP1NRD4U,treatment answer error
+A2A4EZ7D6MY2I6,treatment answer error
 A2ZJWAYA4LH5WX,condition_answer answer error
 A2XSGALF8O9ISQ,treatment answer error
+A4I7WALFRNQTV,previous knowledge
 A1R1E7TZ9OHFIG,condition_answer answer error
 A21Z2OEJZYP61M,previous knowledge
 A272X64FOZFYLB,no links
 A5WAMZZBC03QJ,previous knowledge
+A2QLXGRPIN6KEV,previous knowledge
 A2ZE857ADAIQI2,previous knowledge
 A390FP6231I631,condition_answer answer error
 A3K2VSBTT3WUTI,previous knowledge
@@ -85,7 +97,9 @@ A3DM34HQ35US2R,previous knowledge
 A2T007HZK66WM,treatment answer error
 A261O5J94AG1ZG,treatment answer error
 AC10U9G34PQGG,too quick
+AX9QU59L6ZMHZ,condition_answer answer error
 A1U5G5VJKLISE0,previous knowledge
+A2N83DS8ORW3W7,treatment answer error
 A36MOV8E6SYHCR,too quick
 A34LSCB90T5KYE,treatment answer error
 A3HTZIL19ARQEO,treatment answer error
@@ -95,6 +109,8 @@ AZGPOH3HUID39,treatment answer error
 zw3hk,condition_answer answer error
 A1HY2OUUWII67J,treatment answer error
 A3MZDFSIZYN1NT,condition_answer answer error
+A3JTW3FZIXWLFQ,previous knowledge
+A21G4TXLM2ZO8K,previous knowledge
 AOEO9ZV81R0I4,previous knowledge
 A39NRBRR2KQ6GA,previous knowledge
 A2WKJ2XE4UIOM4,treatment answer error
@@ -111,12 +127,14 @@ A2L8BI5CRPR5WP,too quick
 A125KTODCS8EOP,treatment answer error
 A2WZ71TT9AJPV,too quick
 A2LQIPUZ8USGNS,previous knowledge
+A3BAC4I8KX0YSV,previous knowledge
 A22JD162E9Z65S,condition_answer answer error
 A3W0HQHLD5XTS7,previous knowledge
 A2U5PD8T5J37OE,treatment answer error
 A3LUB4YOALD32J,previous knowledge
 A1T0ND039EWAVV,treatment answer error
 A1U26HJT2WY5YQ,previous knowledge
+A3311YWVCI9JKJ,treatment answer error
 A2WC2NO555XU3J,too quick
 ADUR1VFO25OJL,previous knowledge
 A2IFHU3P1MF54K,previous knowledge
@@ -132,14 +150,18 @@ A3JSI5WV5EJ602,treatment answer error
 A2AT5B7RW4VXBX,previous knowledge
 A3F1SO6HO48A0E,treatment answer error
 A2UJ35MP1WNQF8,previous knowledge
+A1JJJOUS3NE84W,previous knowledge
 A50UY1556VDIA,previous knowledge
 AS834Q2XXOEBP,condition_answer answer error
 A23DIRTLAL5RA6,no reason
 A1L1OK7TKX3V3Q,treatment answer error
 ATTAQA9KLECBA,treatment answer error
 A2I4VNAS21FXCE,treatment answer error
+A24HOBENULGZA2,treatment answer error
+AVTF0QMC2HBHK,treatment answer error
 A215Y95B9IT46S,treatment answer error
 A16FYJHL0R6CLJ,treatment answer error
+A39VDXGL1RVURU,previous knowledge
 A3R3UB4E8U9J5O,previous knowledge
 A2BU07K7AYSVOF,previous knowledge
 A3ADHMAWDD7M6V,previous knowledge
@@ -150,6 +172,7 @@ A1PTH9KTRO06EG,previous knowledge
 ACB7Y1J58NG7H,condition_answer answer error
 A1PCZC53UDJ93K,previous knowledge
 A2YIB84VKYNKWD,previous knowledge
+AV7UX8QQXABSK,condition_answer answer error
 A19H6QRCGKBOUH,treatment answer error
 AQ8TJLOZRYS2V,previous knowledge
 A32D778QPHXZE3,treatment answer error
@@ -186,6 +209,7 @@ AGJLUYRQKL1I4,previous knowledge
 A13FMBRKCTB49K,previous knowledge
 A2UY210CTJXB0K,treatment answer error
 A3S3WYVCVWW8IZ,no links
+AX9VPFP2JBFN4,treatment answer error
 A282YZBNIRNEFG,treatment answer error
 A129ZL26EECX0B,no date
 A3IOOW5SX3UDSG,previous knowledge
@@ -197,6 +221,7 @@ A2Y9EMAU0CRFX9,previous knowledge
 Cglezk5UVcbeR5hr,previous knowledge
 A2196PMIF2YORD,no reason
 A1NAFXXC41I7NC,previous knowledge
+A2KZYZO3EGYSPM,previous knowledge
 A26RK8FT4LF5P4,treatment answer error
 A1PS4RHP4S0HMW,treatment answer error
 A1PNQWE4UAI1P2,treatment answer error
@@ -214,6 +239,7 @@ A2XJ1V0GGFO9GQ,previous knowledge
 A3OZ8KF0HWSVWK,treatment answer error
 AN7ED6JKQWVIP,previous knowledge
 A2AQ003CRPEIB1,treatment answer error
+A1LTR3CMCDUW2A,previous knowledge
 A143XRCI1YXAFE,too quick
 A2B37SM2VYC8KG,previous knowledge
 AYVJ1AI4VLWU9,condition_answer answer error
@@ -267,6 +293,8 @@ ARJ7XWSK0Y8FJ,previous knowledge
 A8R35AUWHX9HH,condition_answer answer error
 A366DY2ZFMUB8Z,too quick
 A31A2PFANDTFQ5,previous knowledge
+A32S2FSWV3TJYG,treatment answer error
 A1RUBSQBBOJHPO,previous knowledge
+A280U81LOBQL6N,condition_answer answer error
 A3FG5J8A7YDVRN,no reason
 A24D5B7GFP90PT,previous knowledge
