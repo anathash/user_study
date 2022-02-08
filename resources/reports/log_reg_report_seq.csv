@@ -1,0 +1,109 @@
+                   MNLogit Regression Results                   
+Dep. Variable:  ,response        ,  No. Observations:  ,   369  
+Model:          ,MNLogit         ,  Df Residuals:      ,   273  
+Method:         ,MLE             ,  Df Model:          ,    93  
+Date:           ,Wed, 26 Jan 2022,  Pseudo R-squ.:     ,0.1490  
+Time:           ,21:37:09        ,  Log-Likelihood:    , -365.14
+converged:      ,True            ,  LL-Null:           , -429.06
+Covariance Type:,nonrobust       ,  LLR p-value:       ,0.009661
+ response=N,   coef   , std err ,    z    ,P>|z| ,  [0.025 ,  0.975] 
+l1_A       ,   -2.1952,      nan,      nan,   nan,      nan,      nan
+l1_S       ,   -1.5932,      nan,      nan,   nan,      nan,      nan
+l1_Y       ,    0.7885,      nan,      nan,   nan,      nan,      nan
+l1_M       ,    0.6216,      nan,      nan,   nan,      nan,      nan
+l1_N       ,    0.5963,      nan,      nan,   nan,      nan,      nan
+l2_Y       ,   -2.4372,      nan,      nan,   nan,      nan,      nan
+l2_M       ,    1.7333,      nan,      nan,   nan,      nan,      nan
+l2_N       ,    2.9932, 1.24e+07, 2.42e-07, 1.000,-2.43e+07, 2.43e+07
+l3_Y       ,   -1.5728,      nan,      nan,   nan,      nan,      nan
+l3_M       ,   -0.8964,      nan,      nan,   nan,      nan,      nan
+l3_N       ,   -0.9900,      nan,      nan,   nan,      nan,      nan
+l4_Y       ,   -1.0099,      nan,      nan,   nan,      nan,      nan
+l4_M       ,    0.6465, 1.76e+06, 3.67e-07, 1.000,-3.45e+06, 3.45e+06
+l4_N       ,    0.1264, 1.61e+07, 7.84e-09, 1.000,-3.16e+07, 3.16e+07
+l5_Y       ,   -0.1232, 7.66e+06,-1.61e-08, 1.000, -1.5e+07,  1.5e+07
+l5_M       ,    1.2329, 5.49e+06, 2.25e-07, 1.000,-1.08e+07, 1.08e+07
+l5_N       ,    1.1131, 1.88e+06, 5.93e-07, 1.000,-3.68e+06, 3.68e+06
+l6_Y       ,   -2.6887, 7.64e+06,-3.52e-07, 1.000, -1.5e+07,  1.5e+07
+l6_M       ,   -1.1310,      nan,      nan,   nan,      nan,      nan
+l6_N       ,   -1.6523,      nan,      nan,   nan,      nan,      nan
+l7_Y       ,    0.9097, 3.65e+06, 2.49e-07, 1.000,-7.15e+06, 7.15e+06
+l7_M       ,    1.8617,      nan,      nan,   nan,      nan,      nan
+l7_N       ,    2.3382, 1.27e+07, 1.84e-07, 1.000,-2.49e+07, 2.49e+07
+l8_Y       ,   -1.2549,      nan,      nan,   nan,      nan,      nan
+l8_M       ,   -1.0383,      nan,      nan,   nan,      nan,      nan
+l8_N       ,   -1.9949,      nan,      nan,   nan,      nan,      nan
+l9_Y       ,   -1.0185, 3.14e+06,-3.25e-07, 1.000,-6.15e+06, 6.15e+06
+l9_M       ,    0.5543,      nan,      nan,   nan,      nan,      nan
+l9_N       ,    2.0014, 3.96e+06, 5.05e-07, 1.000,-7.76e+06, 7.76e+06
+l10_Y      ,    1.0707,      nan,      nan,   nan,      nan,      nan
+l10_M      ,    3.6234,      nan,      nan,   nan,      nan,      nan
+l10_N      ,    1.9860, 4.78e+06, 4.15e-07, 1.000,-9.38e+06, 9.38e+06
+---------------------------------------------------------------------
+response=NS,   coef   , std err ,    z    ,P>|z| ,  [0.025 ,  0.975] 
+l1_A       ,  -18.4135, 2.91e+07,-6.34e-07, 1.000, -5.7e+07,  5.7e+07
+l1_S       ,  -16.5595, 2.71e+07,-6.12e-07, 1.000, -5.3e+07,  5.3e+07
+l1_Y       ,   24.5011,      nan,      nan,   nan,      nan,      nan
+l1_M       ,  -35.0086,      nan,      nan,   nan,      nan,      nan
+l1_N       ,   -0.7213,      nan,      nan,   nan,      nan,      nan
+l2_Y       ,  -35.0468,  1.7e+09,-2.07e-08, 1.000,-3.32e+09, 3.32e+09
+l2_M       ,   -4.7666, 1.15e+08,-4.14e-08, 1.000,-2.25e+08, 2.25e+08
+l2_N       ,    5.0050, 8.74e+06, 5.73e-07, 1.000,-1.71e+07, 1.71e+07
+l3_Y       ,  -30.8607,      nan,      nan,   nan,      nan,      nan
+l3_M       ,  -10.4036, 1.54e+07,-6.77e-07, 1.000,-3.01e+07, 3.01e+07
+l3_N       ,    1.6623,      nan,      nan,   nan,      nan,      nan
+l4_Y       ,   -9.2975, 8.86e+07,-1.05e-07, 1.000,-1.74e+08, 1.74e+08
+l4_M       ,   -9.9824,      nan,      nan,   nan,      nan,      nan
+l4_N       ,  -27.9880,      nan,      nan,   nan,      nan,      nan
+l5_Y       ,  -22.0987, 2.85e+08,-7.76e-08, 1.000,-5.58e+08, 5.58e+08
+l5_M       ,  -18.6395,      nan,      nan,   nan,      nan,      nan
+l5_N       ,   -5.0921,  9.5e+07,-5.36e-08, 1.000,-1.86e+08, 1.86e+08
+l6_Y       ,  -20.5902, 5.96e+07,-3.45e-07, 1.000,-1.17e+08, 1.17e+08
+l6_M       ,  -18.8172,      nan,      nan,   nan,      nan,      nan
+l6_N       ,  -11.5717,      nan,      nan,   nan,      nan,      nan
+l7_Y       ,  -20.8670,      nan,      nan,   nan,      nan,      nan
+l7_M       ,   17.4724,      nan,      nan,   nan,      nan,      nan
+l7_N       ,    0.5173, 9.22e+06, 5.61e-08, 1.000,-1.81e+07, 1.81e+07
+l8_Y       ,   25.4026, 5.84e+07, 4.35e-07, 1.000,-1.14e+08, 1.14e+08
+l8_M       ,   25.1401, 1.84e+07, 1.37e-06, 1.000, -3.6e+07,  3.6e+07
+l8_N       ,    2.4702, 8.57e+07, 2.88e-08, 1.000,-1.68e+08, 1.68e+08
+l9_Y       ,   36.9357,      nan,      nan,   nan,      nan,      nan
+l9_M       ,    2.0845, 4.57e+07, 4.56e-08, 1.000,-8.96e+07, 8.96e+07
+l9_N       ,   14.6838,      nan,      nan,   nan,      nan,      nan
+l10_Y      ,   -4.8596,      nan,      nan,   nan,      nan,      nan
+l10_M      ,   21.0677,      nan,      nan,   nan,      nan,      nan
+l10_N      ,   -7.0431, 6.18e+13,-1.14e-13, 1.000,-1.21e+14, 1.21e+14
+---------------------------------------------------------------------
+response=Y,   coef   , std err ,    z    ,P>|z| ,  [0.025 ,  0.975] 
+l1_A      ,   -1.6361,      nan,      nan,   nan,      nan,      nan
+l1_S      ,   -1.0016,      nan,      nan,   nan,      nan,      nan
+l1_Y      ,    2.1037, 2.02e+06, 1.04e-06, 1.000,-3.96e+06, 3.96e+06
+l1_M      ,   -0.5944,      nan,      nan,   nan,      nan,      nan
+l1_N      ,   -0.5829,      nan,      nan,   nan,      nan,      nan
+l2_Y      ,   -0.7207, 5.26e+06,-1.37e-07, 1.000,-1.03e+07, 1.03e+07
+l2_M      ,    0.4350, 4.93e+06, 8.82e-08, 1.000,-9.66e+06, 9.66e+06
+l2_N      ,    0.3004,      nan,      nan,   nan,      nan,      nan
+l3_Y      ,    1.0585,      nan,      nan,   nan,      nan,      nan
+l3_M      ,   -0.5051, 4.67e+06,-1.08e-07, 1.000,-9.15e+06, 9.15e+06
+l3_N      ,   -0.2656,       -0,      inf, 0.000,   -0.266,   -0.266
+l4_Y      ,    1.4362,      nan,      nan,   nan,      nan,      nan
+l4_M      ,    0.0498,      nan,      nan,   nan,      nan,      nan
+l4_N      ,    0.0342,  1.3e+07, 2.64e-09, 1.000,-2.54e+07, 2.54e+07
+l5_Y      ,    0.3985,      nan,      nan,   nan,      nan,      nan
+l5_M      ,   -0.3996,      nan,      nan,   nan,      nan,      nan
+l5_N      ,    0.3510,      nan,      nan,   nan,      nan,      nan
+l6_Y      ,   -0.1930,      nan,      nan,   nan,      nan,      nan
+l6_M      ,   -1.3979, 1.06e+07,-1.32e-07, 1.000,-2.08e+07, 2.08e+07
+l6_N      ,   -1.9925,      nan,      nan,   nan,      nan,      nan
+l7_Y      ,    0.7341,      nan,      nan,   nan,      nan,      nan
+l7_M      ,    0.0133,      nan,      nan,   nan,      nan,      nan
+l7_N      ,    0.2745,      nan,      nan,   nan,      nan,      nan
+l8_Y      ,    0.3510, 2.08e+07, 1.69e-08, 1.000,-4.07e+07, 4.07e+07
+l8_M      ,   -1.4301,  1.6e+07,-8.92e-08, 1.000,-3.14e+07, 3.14e+07
+l8_N      ,   -2.1838, 3.01e+07,-7.26e-08, 1.000,-5.89e+07, 5.89e+07
+l9_Y      ,    0.5893,  1.9e+07, 3.09e-08, 1.000,-3.73e+07, 3.73e+07
+l9_M      ,    1.0198, 2.21e+07,  4.6e-08, 1.000,-4.34e+07, 4.34e+07
+l9_N      ,    1.9238,      nan,      nan,   nan,      nan,      nan
+l10_Y     ,    0.8456,      nan,      nan,   nan,      nan,      nan
+l10_M     ,    1.8418,      nan,      nan,   nan,      nan,      nan
+l10_N     ,    1.2848,      nan,      nan,   nan,      nan,      nan

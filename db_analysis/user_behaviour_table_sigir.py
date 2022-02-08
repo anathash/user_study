@@ -1,33 +1,25 @@
 import csv
 import math
-import shutil
 from collections import Counter
-from datetime import datetime
-
 import scipy.stats as stats
 import statsmodels
+
 from statsmodels.stats.weightstats import ttest_ind
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
     TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats, \
-    string_to_datetime, get_server_url, get_links_stats_by_exp, get_time_spent, filter_user_new
+    string_to_datetime, get_server_url
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
 #BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
 
-
-def write_to_file(exp_data, filtered_users, limit, append = False):
+def write_to_file(exp_data, filtered_users, limit):
 
     if limit:
         filename = '../resources/reports//user_behaviour_limit_'+str(limit)+'.csv'
     else:
         filename = '../resources/reports//user_behaviour.csv'
 
-    if append:
-        mode = 'a'
-    else:
-        mode = 'w'
-
-    with open(filename, mode, newline='', encoding='utf8') as csvfile:
+    with open(filename, 'w', newline='', encoding='utf8') as csvfile:
         fieldnames = ['exp_id', 'WorkerId', 'sequence','url','start_time', 'search_time_exp','search_time_actions',
                       'num_links_pressed','knowledge','feedback','reason','treatment_answer_correct','condition_answer_correct','comments',
                       'ad_exp_effect', 'ad_dec_effect', 'ad_comments',
@@ -35,8 +27,7 @@ def write_to_file(exp_data, filtered_users, limit, append = False):
                       'link_order1', 'link_order2', 'link_order3', 'link_order4', 'link_order5', 'link_order6', 'link_order7', 'link_order8', 'link_order9', 'link_order10',
                       'link1_time', 'link2_time', 'link3_time', 'link4_time', 'link5_time', 'link6_time', 'link7_time', 'link8_time', 'link9_time', 'link10_time']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        if not append:
-            writer.writeheader()
+        writer.writeheader()
         for query, sequences in exp_data.items():
             for seqeunce, entries in sequences.items():
                 soreted_entries = sorted(entries.items(), key=lambda kv: kv[0], reverse=True) #sort newest_first
@@ -47,51 +38,48 @@ def write_to_file(exp_data, filtered_users, limit, append = False):
                 for i in range(0,n):
                     row = soreted_entries[i][1]
                     writer.writerow(row)
-
     filterf = '../resources/reports/filtered_users'
     if limit:
         filterf +='_limit_'+str(limit)+'.csv'
     else:
         filterf +='.csv'
 
-    with open( '../resources/reports/filtered_users.csv', mode , newline='', encoding='utf8') as csvfile:
+    with open( '../resources/reports/filtered_users.csv', 'w', newline='', encoding='utf8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=['WorkerId', 'Filter Reason'])
-        if not append:
-            writer.writeheader()
+        writer.writeheader()
         for row in filtered_users:
             writer.writerow(row)
 
-
-def process_results(mycursor, results,links,  link_times, link_orders,  time_diff_actions_dict,filter_users = True, add_time_diff_actions = False):
+def process_results(mycursor, results,links,  link_times, link_orders, filter_users = True, add_time_diff_actions = False):
     exp_data = {}
     filtered_users = []
     for x in results:
-        url = x[2][41:]
+        url = x[2][35:]
         start = x[7]
         end = x[8]
         exp_id = x[0]
-#        if exp_id not in time_diff_actions_dict:
-#            continue
-        time_diff_exp = get_time_spent(start, end, True)
+        if end:
+            time_diff_exp = get_time_diff(start, end)
+        else:
+            time_diff_exp = 0
 
         #        time_diff_actions, time_diff_exp = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
+        if add_time_diff_actions:
+            time_diff_actions = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
 
         # This means that the exp_id was regenerated - so we take the difference between the first clicked link and the end time. This bug should be fixed
         answer_treatment = x[12].strip()
         answer_condition = x[13].strip()
         query = x[5]
+        sdt = string_to_datetime(start)
         if filter_users:
-            filter_msg = filter_user_new(x[1], query, answer_treatment, answer_condition, start, end, x[9], x[11])
+            filter_msg = filter_user(x[1], query, answer_treatment, answer_condition, start, end, x[9], x[11])
             if filter_msg:
                 if 'test' not in filter_msg:
                     filtered_users.append({'WorkerId': x[1], 'Filter Reason': filter_msg})
                 continue
 
         time_diff_exp = "%.4f" % round(time_diff_exp, 2)
-        if add_time_diff_actions:
-            # time_diff_actions = get_time_diff_from_actions(mycursor, x[1], time_diff_exp, end)
-            time_diff_actions = time_diff_actions_dict[exp_id]
-
         if add_time_diff_actions:
             time_diff_actions = "%.4f" % round(time_diff_actions, 2)
         else:
@@ -102,7 +90,7 @@ def process_results(mycursor, results,links,  link_times, link_orders,  time_dif
         worker_id = x[1]
         sequence = x[6]
 
-        entry = {'exp_id': exp_id, 'WorkerId': worker_id, 'sequence': sequence, 'url': url, 'start_time': start.strftime('%m/%d/%Y, %I:%M:%S %p'),
+        entry = {'exp_id': exp_id, 'WorkerId': worker_id, 'sequence': sequence, 'url': url, 'start_time': start,
                  'search_time_exp': time_diff_exp, 'search_time_actions': time_diff_actions,
                  'knowledge': x[9], 'feedback': x[10], 'reason': x[11],
                  'treatment_answer_correct': treatment_answer_correct,
@@ -112,64 +100,47 @@ def process_results(mycursor, results,links,  link_times, link_orders,  time_dif
         num_links = 0
         for i in range(1, 11):
             # link_pressed = links[exp_id][i]
-            if exp_id in links:
-                link_pressed = links[exp_id][i]
+            if worker_id in links:
+                link_pressed = links[worker_id][i]
                 entry['link' + str(i)] = link_pressed
                 num_links += link_pressed
-                entry['link' + str(i) + '_time'] = link_times[exp_id][i]
-                entry['link_order' + str(i)] = link_orders[exp_id][i]
+                entry['link' + str(i) + '_time'] = link_times[worker_id][i]
+                entry['link_order' + str(i)] = link_orders[worker_id][i]
 
         entry['num_links_pressed'] = num_links
         if query not in exp_data:
             exp_data[query] = {}
         if sequence not in exp_data[query]:
             exp_data[query][sequence] = {}
-        exp_data[query][sequence][start] = entry
+        exp_data[query][sequence][sdt] = entry
     return exp_data, filtered_users
 
 #TODO : filter by knowledge?? YES /NO/ ALL
 
-def get_latest_date(limit = None):
-    latest_date =None
-    #datetime.strptime(str, '%m/%d/%Y, %I:%M:%S %p')
 
-    fname = get_filename('user_behaviour', limit)
-    with open(fname, newline='', encoding='utf8') as csvf:
-        reader = csv.DictReader(csvf)
-        for row in reader:
-            start_date_str = row['start_time']
-            start_date = datetime.strptime(start_date_str, '%m/%d/%Y, %I:%M:%S %p')
-            if not latest_date or start_date > latest_date:
-                latest_date = start_date
-    return latest_date
-
-
-def generate_user_behaviour_table(limit = None, db_name = 'local', append_from_last = True, filter_users = True, add_time_diff_actions = False):
-    db = connect_to_db(db_name)
+def generate_user_behaviour_table(limit = None, from_batch = None, to_batch=None, local = True, filter_users = True, add_time_diff_actions = False):
+    db = connect_to_db(local)
     mycursor = db.cursor()
     #links = get_links_entered_in_exps(mycursor)
 
-    if append_from_last:
-        fname = get_filename('user_behaviour', limit)
-        backup_fname = fname+'.backup'
-        shutil.copy2(fname, backup_fname)  # complete target filename given
-        latest_date = get_latest_date(limit)
-        date_str = latest_date.strftime('%Y-%m-%d %H:%M:%S')
-        exp_data_query_string = "SELECT * FROM serp.exp_data where start > '" +date_str+"'"
-        links, link_times, link_orders, time_diff_actions = get_links_stats_by_exp(mycursor, date_str=date_str)
+    if from_batch:
+        if not to_batch:
+            to_batch = from_batch
+        amazon_results, ids_sql_string = get_worker_id_list(from_batch, to_batch)
+        exp_data_query_string = "SELECT * FROM serp.exp_data where user_id in " + ids_sql_string
+
     else:
         exp_data_query_string = "SELECT * FROM serp.exp_data"
-        links, link_times, link_orders, time_diff_actions = get_links_stats_by_exp(mycursor)
 
-
+    links, link_times, link_orders = get_links_stats(mycursor)
     mycursor.execute(exp_data_query_string)
     results = mycursor.fetchall()
 
     exp_data, filter_users = process_results(mycursor=mycursor, results = results,
                                              links=links,  link_times=link_times,
-                                             link_orders=link_orders, time_diff_actions_dict=time_diff_actions,filter_users = filter_users,  add_time_diff_actions = add_time_diff_actions)
+                                             link_orders=link_orders, filter_users = filter_users, add_time_diff_actions = add_time_diff_actions)
 
-    write_to_file(exp_data=exp_data, filtered_users=filter_users, limit=limit, append = append_from_last)
+    write_to_file(exp_data=exp_data, filtered_users=filter_users, limit=limit)
 
 def get_answer_count(mode = 'url', print_update_query = False, local  = True, prefix = None):
     server_url = get_server_url(local)
@@ -1040,13 +1011,13 @@ def create_response_prediction_features_vectors(group):
 
 
 if __name__ == "__main__":
-    #create_response_prediction_features_vectors('S')
-    #create_response_prediction_features_vectors('A')
-    #create_response_prediction_features_vectors('O')
+    create_response_prediction_features_vectors('S')
+    create_response_prediction_features_vectors('A')
+    create_response_prediction_features_vectors('O')
     #sequence_scores()
     #ctr_per_viewpoint()
     #create_response_prediction_features_vectors()
-    generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
+    #generate_user_behaviour_table(filter_users=True, local=False, add_time_diff_actions=True)
     #extract_answers_from_behaviour_table(prefix=1, limit=None)
     #extract_answers_from_behaviour_table(prefix = False, posterior_bias=True, limit=None)
     #extract_clicks_from_behaviour_table(prefix = False, posterior_bias=True, limit=None)

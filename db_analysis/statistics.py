@@ -1,6 +1,12 @@
 import csv
 from math import log
+import numpy as np
+import matplotlib.pylab as plt
+import seaborn as sns
+from numpy.core import mean
 
+from sklearn.feature_selection import VarianceThreshold
+from statsmodels.stats.weightstats import ttest_ind
 import numpy
 import scipy
 import statsmodels.api as sm
@@ -14,6 +20,8 @@ import scipy.stats as stats
 
 import pandas as pd
 from scipy.stats import chisquare, chi2_contingency, fisher_exact, power_divergence
+
+from plot_graphs import GRAPH_DIR
 
 
 def anova_from_file(fname, metric_field, group_by):
@@ -75,12 +83,12 @@ def three_way_anova(c1,t1,g1,c2,t2,g2,t3,c3,g3):
 def ttest_from_count(c1,t1,c2,t2):
     a1 = [1]*c1 + [0]*(t1-c1)
     a2 = [1]*c2 + [0]*(t2-c2)
-    ttest = scipy.stats.ttest_ind(a1,a2)
-    if ttest.pvalue < 0.05:
-        print ('TTest significant, p < 0.05')
-    else:
-        print('TTest NOT significant, p >= 0.05')
-
+    #ttest = scipy.stats.ttest_ind(a1,a2)
+   # if ttest.pvalue < 0.05:
+   #     print ('TTest significant, p < 0.05')
+   # else:
+   #     print('TTest NOT significant, p >= 0.05')
+    ttest = ttest_ind(a1, a2)
     print(ttest)
 
 def link1_phys_ctr_test():
@@ -310,8 +318,9 @@ def chi_cont(results, row_index, col_index=['Y','M','N']):
     print('power_divergence')
     print(r)
 
-    t = sm.stats.Table2x2(np.array(df))
-    print(t.summary())
+    if len(col_index) == 2:
+        t = sm.stats.Table2x2(np.array(df))
+        print(t.summary())
 
 def chi_no_ads():
     results = [[26,13,10], [17,23,12],[10,20,17]]
@@ -611,8 +620,7 @@ def cont_exp(scale):
 #    sm = [0.41,0.375,0.22]
 #    res = [[x*scale for x in m],[x*scale for x in sm]]
 #    chi_cont(res, row_index=['M','SM'])
-
-if __name__ == "__main__":
+def kmeans():
     clusters = [[0.40625,0.375,0.21875],
                 [0.233,0.25,0.483],
                 [0.43,0.32,0.25],
@@ -628,8 +636,222 @@ if __name__ == "__main__":
                 [0.36,0.27,0.36]]
     kmeans = KMeans(n_clusters=4, random_state=0).fit(np.array(clusters))
     print(kmeans.labels_)
+
+
+def logistic_regression(f, group, mode = 'clicks'):
+    if f:
+        data = pd.read_csv('../resources/reports//'+f+'.csv')  # load data set
+    elif group:
+        data = pd.read_csv('../resources/reports//user_response_labels_'+group+'.csv')  # load data set
+    else:
+        data = pd.read_csv('../resources/reports//user_response_labels.csv')  # load data set
+
+
+
+    X = data.iloc[:, 1:]  # select columns 1 through end
+    if mode == 'seq':
+        X = X.iloc[:, 32:]
+    elif mode == 'clicks':
+        X = X.iloc[:, 32:]
+
+    #selector = VarianceThreshold( 0.0001)
+    #selector.fit_transform(X)
+   # X.columns ^ low_variance.columns
+   # X.shape
+   # X.shape
+   # X = low_variance
+
+   # low_variance=  data[data.columns[selector.get_support(indices=True)]]
+
+    #        if group != 'O':
+#            X = X.iloc[:, :27]
+#        else:
+#            X = X.iloc[:, :30]
+#    elif mode == 'clicks':
+#        if group != 'O':
+#            X = X.iloc[:, 27:]
+#        else:
+#            X = X.iloc[:, 30:]
+
+    y = data.iloc[:, 0]  # select column 0, the response
+   # sm.add_constant(X)
+   # model = sm.MNLogit(y, X)
+
+    #model_fit = model.fit_regularized(method='l1')
+    #r = model_fit.summary().as_csv()
+    #print(model_fit.summary())
+
+    clf = LogisticRegression( solver='saga', penalty='l1', max_iter=400).fit(X, y)
+    #clf = LogisticRegression( solver='saga', penalty='l1', max_iter=400).fit(X, y)
+    #clf = LogisticRegression(random_state=0).fit(X, y)
+    print('Non Zero weights: ' + str(np.count_nonzero(clf.coef_)))
+
+    #print(clf.classes_)
+
+    weights = []
+    weights.append(clf.coef_[2])
+    weights.append(clf.coef_[0])
+    weights.append(clf.coef_[1])
+    for i in [2,0,1]:
+        s = ''
+        for c in clf.coef_[i]:
+            s += str(c) + ','
+        print(s)
+    return weights
+
+
+def weight_stats(group, answer, vals):
+    non_zero = [x for x in vals if x != 0]
+    #print ('non zero  =  ' + len(non_zero ))
+    min_v =  min(vals)
+    mins = "%.2f" % round(min_v, 2)
+    max_v =  max(vals)
+    maxs = "%.2f" % round(max_v, 2)
+    avg = mean(vals)
+    avgs ="%.2f" % round(avg, 2)
+#    print('min = ' + min(vals))
+#    print('max = ' + max(vals))
+#    print('avg = ' + mean(vals))
+    print(group + '&' + answer +'&'+str(len(non_zero)) + '&' + mins +'&' + maxs + '&' + avgs)
+
+def kendel_tau(input_file):
+    ranking = {}
+    with open('../resources/reports/' + input_file + '.csv', 'r', newline='') as inputCSV:
+        reader = csv.DictReader(inputCSV)
+        for row in reader:
+
+            vals = list(row.values())
+            if len(vals) > 10 and vals[10] == "":
+                vals = vals[:-1]
+            vals = vals[1:]
+            ys = []
+            for i in range(0, len(vals)):
+                if vals[i] != "":
+                    ys.append(float(vals[i]))
+            ranking[row['series']] = ys
+
+    print('M-N')
+    tau, p_value = stats.kendalltau(ranking['M'], ranking['N'])
+    print(tau, p_value)
+
+    print('Y-M')
+    tau, p_value = stats.kendalltau(ranking['Y'], ranking['M'])
+    print(tau, p_value)
+    print('Y-N')
+    tau, p_value = stats.kendalltau(ranking['Y'], ranking['N'])
+    print(tau, p_value)
+
+def generete_features_list_ss():
+    fl = ['$f_d^1$','$f_i^1$']
+    for i in range (1,11):
+        fl.append('$f_y^{'+str(i)+'}$')
+        fl.append('$f_m^{'+str(i)+'}$')
+        fl.append('$f_n^{'+str(i)+'}$')
+    return  fl
+
+def generete_features_list_ss2():
+    fl = ['$_D^1$','$_I^1$']
+    for i in range (1,11):
+        fl.append('$_Y^{'+str(i)+'}$')
+        fl.append('$_M^{'+str(i)+'}$')
+        fl.append('$_N^{'+str(i)+'}$')
+    return  fl
+
+
+def generete_features_list():
+    fl = ['(1,d)','(1,i))$']
+    for i in range (1,11):
+        fl.append((str(i)+'y)'))
+        fl.append((str(i)+'m)'))
+        fl.append((str(i)+'n)'))
+#        fl.append('$f_m^{'+str(i)+'}$')
+#        fl.append('$f_n^{'+str(i)+'}$')
+    return  fl
+
+def heatmap():
+    params = {'mathtext.default': 'regular'}
+    plt.rcParams.update(params)
+    data = []
+    print('NO ADS')
+#    groups = ['No Ads, Y', 'No Ads, M', 'No Ads, N',
+#              'DMarketing Ads, Y', 'Direct Marketing Ads, M', 'Direct Marketing Ads, N',
+#              'Indirect Marketing Ads, Y', 'Indirect Marketing Ads, M', 'Indirect Marketing Ads, N']
+
+    groups = ['No Ads, Y', 'No Ads, M', 'No Ads, N',
+              'DM, Y', 'DM, M', 'DM, N',
+              'IM, Y', 'IM, M', 'IM, N']
+    plt.subplots(figsize=(10, 5))
+    #features = generete_features_list()
+    features = generete_features_list_ss2()
+    reg_res = logistic_regression(f=None, group='O', mode='clicks')
+    weight_stats('No Ads','Y',reg_res[0] )
+    weight_stats('No Ads','M',reg_res[1] )
+    weight_stats('No Ads','N',reg_res[2] )
+    data.append(reg_res[0])
+    data.append(reg_res[1])
+    data.append(reg_res[2])
+    reg_res = logistic_regression(f=None, group='A', mode='clicks')
+    weight_stats('DM','Y',reg_res[0] )
+    weight_stats('DM','M',reg_res[1] )
+    weight_stats('DM','N',reg_res[2] )
+
+    data.append(reg_res[0])
+    data.append(reg_res[1])
+    data.append(reg_res[2])
+
+    reg_res = logistic_regression(f=None, group='S', mode='clicks')
+    weight_stats('IM','Y',reg_res[0] )
+    weight_stats('IM','M',reg_res[1] )
+    weight_stats('IM','N',reg_res[2] )
+
+    data.append(reg_res[0])
+    data.append(reg_res[1])
+    data.append(reg_res[2])
+
+
+    ax = sns.heatmap(data, xticklabels=features, yticklabels=groups, cmap='coolwarm')
+    ax.tick_params(axis='x', which='major', labelsize=12)
+    ax.hlines([3, 6, 9], *ax.get_xlim())
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=0, ha="left",
+             rotation_mode="anchor")
+    # Loop over data dimensions and create text annotations.
+
+    #    plt.imshow(data, cmap='coolwarm', interpolation='nearest')
+
+    #ax = sns.heatmap(data, linewidth=0.5, cmap='coolwarm')
+
+#    ax.set_title("Logistic Regression Feature Weights ")
+
+    plt.show()
+#    plt.savefig(GRAPH_DIR + 'heatmap_C_1_rec.pdf')
+
+if __name__ == "__main__":
+    #ttest_from_count(c1=11, t1=32, c2=4, t2=60)
+    #ttest_from_count(c1=11, t1=32, c2=33, t2=172)
+    heatmap()
+    #chi_cont([[43,51+34], [15,36+26]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
+    #chi_cont([[43,51+34], [15,36+26]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
+    #chi_cont([[34,51+43],[26,36+15]], row_index=['SM', 'M'], col_index=['N', 'Y+M'])
+    #chi_cont([[51,34+43],[36,26+15]], row_index=['SM', 'M'], col_index=['M', 'Y+N'])
+    #chi_cont([[15,36,26],[43,51,34]], row_index=['M', 'SM'], col_index=['Y', 'M','N'])
+    #chi_cont([[19,25,65],[20,51,34]], row_index=['M', 'SM'], col_index=['Y', 'M','N'])
+
+# res = chi2_contingency([[16,20,20],[11,18,23]])
+    #kendel_tau('ctr_viewpoint_S')
+    #ttest_from_count(c1=11, t1=32, c2=4, t2=60)
+  #  logistic_regression(f = 'user_response_labels_A', mode='seq')
+  #  logistic_regression(f = 'user_response_labels_A', mode='clicks')
+    #print('NO ADS')
+    #logistic_regression(f = None, group= 'O', mode='clicks')
+    #print('A')
+    #logistic_regression(f = None, group = 'A', mode='clicks')
+    #print('S')
+    #logistic_regression(f = None, group = 'S', mode='clicks')
 #    print('#N/N-SN')
-#    res = chi2_contingency([[16,20,20],[11,18,23]])
+
+
+
 
 
 
@@ -673,7 +895,7 @@ if __name__ == "__main__":
     #ad_first_organic_result_test()
     #SM-M
 
-    #ttest_from_count(c1=7,t1=19,c2=12,t2=16)
+
 
 
     #anova_from_file(BEHAVIOUR_FILE,'num_links_pressed', 'feedback','links_per_feedback.csv')

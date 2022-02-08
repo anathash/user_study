@@ -7,8 +7,9 @@ from datetime import date
 import xmltodict
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
-    get_links_per_worker, get_workers_with_no_link, filter_user
-from turk_api import AMT_api
+    get_links_per_worker, get_workers_with_no_link, filter_user, TREATMENT_CORRECT_ANSWERS, filter_user_new, \
+    get_time_spent
+from turk_api import AMT_api, BLACK_LIST_QUAL, DONE_WORKERS_QUAL, SERP
 
 BATCH_FILE_PREFIX = '../resources/batch results/batch'
 NUM_MNUTES_FOR_BONUS = 2
@@ -74,12 +75,37 @@ def process_bonus(batch_number, worker_ids):
         for worker_id in bonus_workers:
             writer.writerow({'WorkerId': worker_id})
 
-def get_bonuses_workers(dbcursor, worker_ids):
+
+def get_done_workers(worker_ids):
+    done_workers = []
+    db = connect_to_db('shared')
+    dbcursor = db.cursor()
+    q = "SELECT user_id, queries  FROM serp_shared.user_data where user_id in " + worker_ids
+    dbcursor.execute(q)
+    exp_data = dbcursor.fetchall()
+    for r in exp_data:
+        user_id = r[0]
+        queries = r[1]
+        q_set = set(queries[1:-1].split(","))
+        all_qs = TREATMENT_CORRECT_ANSWERS.keys()
+        done = True
+        for q in all_qs:
+            if q not in q_set:
+                done = False
+            if not done:
+                break
+        if done:
+            done_workers.append(user_id)
+    return done_workers
+
+
+def process_workers(dbcursor, worker_ids):
     bonus_workers = set()
     num_links_per_workers = get_links_per_worker(dbcursor, worker_ids)
     sql_exp_data_query_string = "SELECT *  FROM serp.exp_data where user_id in " + worker_ids
     dbcursor.execute(sql_exp_data_query_string)
     exp_data = dbcursor.fetchall()
+    black_list = []
     for r in exp_data:
         exp_id = r[0]
         worker_id = r[1]
@@ -88,19 +114,20 @@ def get_bonuses_workers(dbcursor, worker_ids):
         answer_treatment = r[12].strip()
         answer_condition = r[13].strip()
         query = r[5]
-        if filter_user(worker_id, query, answer_treatment, answer_condition, start, end, r[9], r[11]):
-            continue
+        if filter_user_new(worker_id, query, answer_treatment, answer_condition, start, end, r[9], r[11], filter_prev_know= False):
+            black_list.append(worker_id)
 
         if not end:
             continue
         else:
-            time_spent = get_time_diff(start, end)
+            time_spent = get_time_spent(start, end)
 
         if time_spent >= NUM_MNUTES_FOR_BONUS:
             #if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id][exp_id]) >= NUM_LINKS_FOR_BONUS:
             if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id]) >= NUM_LINKS_FOR_BONUS:
                 bonus_workers.add(worker_id)
-    return bonus_workers
+    done_workers = get_done_workers(worker_ids)
+    return done_workers, black_list, bonus_workers
 
 
 def get_paid_workers():
@@ -118,14 +145,20 @@ def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from
 
     workers_to_pay = []
     workers_not_finished = []
-    db = connect_to_db(local=False)
+    db = connect_to_db('biu')
     mycursor = db.cursor()
-    bonus_dict = {}
-    if bonus_payment:
-        bonus_dict = get_bonuses_workers(mycursor,ids_sql_string)
-        print(str(len(bonus_dict)) + ' bonuses')
 
-    sql_query_string = "SELECT * FROM serp.user_config where amazon_id in " + ids_sql_string
+    done_workers, black_list, bonus_dict = process_workers(mycursor,ids_sql_string)
+    for u in black_list:
+        api.assign_serp_qualification(u, BLACK_LIST_QUAL, 1)
+    for u in done_workers:
+        api.assign_serp_qualification(u, DONE_WORKERS_QUAL, 1)
+#    if bonus_payment:
+#        bonus_dict = get_bonuses_workers(mycursor,ids_sql_string)
+    print(str(len(bonus_dict)) + ' bonuses')
+
+    #sql_query_string = "SELECT * FROM serp.user_config where amazon_id in " + ids_sql_string
+    sql_query_string = "SELECT * FROM serp.exp_verification_codes where amazon_id in " + ids_sql_string
 
     mycursor.execute(sql_query_string)
     dbresult = mycursor.fetchall()
@@ -137,15 +170,16 @@ def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from
         worker_supplied_survey_code = answer_dict['QuestionFormAnswers']['Answer']['FreeText']
 #        worker_supplied_survey_code = amazon_results[amazon_id_db]['Answer.surveycode']
         assignment_id = amazon_results[amazon_id_db]['AssignmentId']
-        api.assign_serp_qualification(amazon_id_db)
+        api.assign_serp_qualification(amazon_id_db, SERP, 1)
         if worker_supplied_survey_code == survey_code_db:
             workers_to_pay.append(amazon_id_db)
             api.accept_assignment(assignment_id)
             if amazon_id_db in bonus_dict:
-                api.send_bonus(amazon_id_db, assignment_id, amazon_id_db)
+                api.send_bonus(amazon_id_db, assignment_id, assignment_id)
         else:
             workers_not_finished.append(amazon_id_db)
             api.reject_assignment(assignment_id, 'The survey code entered does not match our records')
+            api.assign_serp_qualification(amazon_id_db, BLACK_LIST_QUAL, 1)
 
     if to_batch:
         amazon_report_csv_filename = BATCH_FILE_PREFIX + str(from_batch) + '_to_' + str(to_batch) + '_approve_reject_report.csv'
@@ -268,7 +302,7 @@ if __name__ == "__main__":
     #process_batch(18,21)
     #process_batch(22,26)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    process_hit('3UDTAB6HH608X25N2D9WWJR4P3Q09W')
+    process_hit('3YGYP13641AHMYTGX0BGYGNB4AURNT')
 
 
 

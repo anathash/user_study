@@ -1,7 +1,15 @@
 import csv
+import datetime
 
 import boto3
+import botocore
 import xmltodict
+
+from utils import connect_to_db, string_to_datetime, get_time_spent, test_users_names_prefix, unsatisfactory
+
+BLACK_LIST_QUAL = '3FZJH8GF5LMVIHAO0K827A4HTNUZVQ'
+DONE_WORKERS_QUAL = '31IGUM6XYQD8HNHQ7FFNCMVHNGKLLA'
+SERP = '3VG0EHWASUFRE500CC3BLPY5SRAOQH'
 
 class AMT_api:
     def __init__(self):
@@ -56,32 +64,37 @@ class AMT_api:
             print('get_hit_results failed for hit: ' + hit_id)
         return response['Assignments']
 
-    def assign_serp_qualification(self, worker_id):
-        response = self.client.associate_qualification_with_worker(
-            QualificationTypeId='3VG0EHWASUFRE500CC3BLPY5SRAOQH',
-            WorkerId=worker_id,
-            IntegerValue=1,
-            SendNotification=False
-        )
-        if self.check_response(response):
-            print('Assigned SERP qualification to worker: ' + worker_id)
+    def assign_serp_qualification(self, worker_id, qual_type_id,  value):
+        try:
+            response = self.client.associate_qualification_with_worker(
+                QualificationTypeId=qual_type_id,#'3VG0EHWASUFRE500CC3BLPY5SRAOQH',
+                WorkerId=worker_id,
+                IntegerValue=value,
+                SendNotification=False
+            )
+            if self.check_response(response):
+                print('Assigned SERP qualification ' + str(value)+ ' to worker: ' + worker_id)
 
-        else:
-            print('assign_serp_qualification failed for worker: ' + worker_id)
+            else:
+                print('assign_serp_qualification failed for worker: ' + worker_id)
+        except botocore.exceptions.ClientError:
+            print('assign qualification failed for worker: ' + worker_id)
 
     def send_bonus(self, worker_id, assignment_id, unique_token):
-        response = self.client.send_bonus(
-            WorkerId=worker_id,
-            BonusAmount='1',
-            AssignmentId= assignment_id,
-            Reason='Qualified answer for health search results survey',
-            UniqueRequestToken=unique_token
-        )
-        if self.check_response(response):
-            print('Bonus granted to worker ' + worker_id)
-        else:
+        try:
+            response = self.client.send_bonus(
+                WorkerId=worker_id,
+                BonusAmount='1',
+                AssignmentId= assignment_id,
+                Reason='Qualified answer for health search results survey',
+                UniqueRequestToken=unique_token
+            )
+            if self.check_response(response):
+                print('Bonus granted to worker ' + worker_id)
+            else:
+                print('send_bonus failed for worker: ' + worker_id)
+        except:
             print('send_bonus failed for worker: ' + worker_id)
-
 
 
     def reject_assignment(self, assignment_id, feedback):
@@ -155,9 +168,54 @@ def pay_bonuses(transaction_file, payemnt_file):
                 #print(response)
 
 
+def set_blacklist_qual_for_all(db_name):
+    db = connect_to_db(db_name)
+    dbcursor = db.cursor()
+    #user, query, treatment_answer, condition_answer, start,end
+    query = "SELECT user_id, query, treatment,problem, start, end FROM serp.exp_data"
+    dbcursor.execute(query)
+    results = dbcursor.fetchall()
+    black_list = []
+    for x in results:
+        user = x[0]
+        query = x[1]
+        treatment_answer = x[2]
+        condition_answer = x[3]
+        start = x[4]
+        end = x[5]
+        if not start or not end:
+             continue
+        time = get_time_spent(start, end)
+
+        if not end or not start:
+            continue
+
+        is_test_user = False
+        for test_user in test_users_names_prefix:
+            if user.lower().startswith(test_user):
+                is_test_user = True
+                break
+
+        if is_test_user:
+            continue
+
+        bad_work_msg = unsatisfactory(query, treatment_answer, condition_answer, time, False)
+        if bad_work_msg:
+            black_list.append(user)
+    api = AMT_api()
+
+    for u in black_list:
+        api.assign_serp_qualification(u,BLACK_LIST_QUAL, 1)
+
+
+
+
 if __name__ == "__main__":
-    api = AMT_api()#19+15+22+7=63
-    api.add_assignments_to_hit('3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T', 7, ' 3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T3')
+    set_blacklist_qual_for_all('local')
+    #api = AMT_api()
+    #api.add_assignments_to_hit('3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T', 7, ' 3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T3')
+
+
     #assign_quals()
 #api = AMT_api()
 #api.get_hit_results('3BPP3MA3TCL2PULQZHB1MHK3IDPELU')
