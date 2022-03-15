@@ -8,7 +8,7 @@ from statsmodels.stats.weightstats import ttest_ind
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
     TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats, \
-    string_to_datetime, get_server_url
+    string_to_datetime
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
 #BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
 

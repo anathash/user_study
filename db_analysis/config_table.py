@@ -2,8 +2,7 @@ import csv
 
 import requests
 
-from db_analysis.utils import connect_to_db, get_time_diff, string_to_datetime, filter_user, get_server_url
-from user_behaviour_table import BEHAVIOUR_FILE
+from db_analysis.utils import connect_to_db, get_time_diff, string_to_datetime, filter_user, SERVER_URL
 
 MIN_MINUTES_IN_SERP = 2
 
@@ -34,9 +33,9 @@ def get_answers_per_url(dbcursor):
     return answers
 
 
-def set_needed_answers_for_ads(seq_prefix, ad_prefix, local, exclude = 'Does Melatonin  treat jetlag'):
-    db = connect_to_db(local)
-    server_url = get_server_url(local)
+def set_needed_answers_for_ads(seq_prefix, ad_prefix, db_name, exclude = 'Does Melatonin  treat jetlag'):
+    db = connect_to_db(db_name)
+    server_url = SERVER_URL[db_name]
     mycursor = db.cursor()
     answer_seq_dict = {}
     query = "SELECT URL FROM serp.config_data  where query != '" + exclude + "';"
@@ -44,7 +43,7 @@ def set_needed_answers_for_ads(seq_prefix, ad_prefix, local, exclude = 'Does Mel
     myresult = mycursor.fetchall()
     for x in myresult:
         db_url = x[0]
-        db_seq = db_url.split('SERP/')[1]
+        db_seq = db_url.split('serp/')[1]
         answer_seq_dict[db_seq] = 0
 
     total = 0
@@ -90,12 +89,65 @@ def update_config_table(dbcursor):
      #   dbcursor.execute(query)
 
 
+def stringefy(str):
+    return "'"+str+"'"
+
+def add_files_to_config(from_id, seq_prefix, ad_prefix, db_name, exclude = 'Does Melatonin  treat jetlag',answered=0,needed_answeres=3):
+    db = connect_to_db(db_name)
+    server_url = SERVER_URL[db_name]
+    mycursor = db.cursor()
+    answer_seq_dict = {}
+    query = "SELECT * FROM serp.config_data  where query != '" + exclude + "';"
+    mycursor.execute(query)
+    myresult = mycursor.fetchall()
+    id = from_id
+    for x in myresult:
+        query = x[1]
+        entry_file = x[2]
+        sequence = x[3]
+        db_url = x[4]
+        topic0 = x[5]
+        topic1 = x[6]
+        #used = x[7]
+        #answered = x[8]
+        #needed_answers = x[9]
+        if 'db_name' == 'biu':
+            db_url_split = db_url.split('serp/')
+            url_prefix = db_url_split[0]+'serp/'
+        else:
+            db_url_split = db_url.split('SERP/')
+            url_prefix = db_url_split[0]+'SERP/'
+
+        orig_page = db_url_split[1]
+        qs = orig_page.split('-')
+        q = qs[0]
+        s = qs[1]
+        if not s.startswith(seq_prefix):
+            continue
+        new_sequence = ad_prefix + sequence
+        new_seq = ad_prefix + s
+        new_url = url_prefix + q + '-' + new_seq
+        # print('UPDATE serp.config_data set used =0, answered = 0, needed_answers=' + str(count) + " where URL='"+new_url+"';")
+        #print('UPDATE serp.config_data set  needed_answers=' + str(needed_answeres) + " where URL='" + new_url + "';")
+        #print('UPDATE serp.config_data set  answered=' + str(answered) + " where URL='" + new_url + "';")
+        id += 1
+#        print("insert into  serp.config_data (id,query,entry_file,sequence,URL,topic0,topic1,used,answered,needed_answers) VALUES  (" +
+#              stringefy(str(id)) +stringefy(query) + "," + stringefy(entry_file) + "," + stringefy(sequence) +"," + stringefy(db_url)
+#              + "," + stringefy(topic0) + "," + stringefy(topic1) + "," + stringefy(used) + "," + stringefy(answered) + "," + stringefy(needed_answers)+
+#              ");")
+
+        print("insert into  serp.config_data (id,query,entry_file,sequence,URL,topic0,topic1,used,answered,needed_answers) VALUES  (" +
+              str(id) + "," + stringefy(query) + "," + stringefy(entry_file) + "," + stringefy(new_sequence) +"," + stringefy(new_url)
+              + "," + stringefy(topic0) +
+              "," + stringefy(topic1) + "," + "0" + "," + str(answered) + "," + str(needed_answeres)+
+              ");")
+
 
 if __name__ == "__main__":
 #    db = connect_to_db(test=False)
 #    dbcursor = db.cursor()
 #    update_config_table(dbcursor)
-    set_needed_answers_for_ads(local = False, seq_prefix='M', ad_prefix='S')
+    add_files_to_config(from_id=264, seq_prefix='Y', ad_prefix='S', db_name='local')
 
 
 

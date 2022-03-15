@@ -14,16 +14,12 @@ FILTER_TIME = 1
 
 WORKERS_WITH_NO_LINKS = ['A0505289TSH2NC1YOHYK', 'A26UIS59SY4NM6', 'A272X64FOZFYLB', 'A2EED3HLTA96CP', 'AERUGBNS48Z4N', 'A3N6DWJC7P3HSI', 'A2TLN8489YGY81','A3S3WYVCVWW8IZ']
 
+
 test_users_names_prefix = ['anat', 'anst','sharadhi','test', 'tamar','tetst','zw3hk']
 
 EXP_START_DATE = datetime.strptime('12/21/2021, 01:01:31 AM', '%m/%d/%Y, %I:%M:%S %p')
+SERVER_URL = {'local': "http://localhost/SERP/",'virginia':"http://cs.virginia.edu/~zw3hk/SERP/",'biu':'http://experiments.biu-ai.com:15080/serp/'}
 
-
-def get_server_url(local = True):
-    if local:
-        return "http://localhost/SERP/"
-    else:
-        return "http://cs.virginia.edu/~zw3hk/SERP/"
 
 
 def connect_to_db(db_name):

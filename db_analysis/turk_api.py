@@ -5,11 +5,12 @@ import boto3
 import botocore
 import xmltodict
 
-from utils import connect_to_db, string_to_datetime, get_time_spent, test_users_names_prefix, unsatisfactory
+from utils import connect_to_db, string_to_datetime, get_time_spent, test_users_names_prefix, unsatisfactory, \
+    TREATMENT_CORRECT_ANSWERS
 
-BLACK_LIST_QUAL = '3FZJH8GF5LMVIHAO0K827A4HTNUZVQ'
-DONE_WORKERS_QUAL = '31IGUM6XYQD8HNHQ7FFNCMVHNGKLLA'
-SERP = '3VG0EHWASUFRE500CC3BLPY5SRAOQH'
+qualifications = {'SERP black list': '3FZJH8GF5LMVIHAO0K827A4HTNUZVQ',
+                  'SERP done': '31IGUM6XYQD8HNHQ7FFNCMVHNGKLLA',
+                   'SERP':'3VG0EHWASUFRE500CC3BLPY5SRAOQH' }
 
 class AMT_api:
     def __init__(self):
@@ -64,16 +65,16 @@ class AMT_api:
             print('get_hit_results failed for hit: ' + hit_id)
         return response['Assignments']
 
-    def assign_serp_qualification(self, worker_id, qual_type_id,  value):
+    def assign_serp_qualification(self, worker_id, qual_type_name,  value):
         try:
             response = self.client.associate_qualification_with_worker(
-                QualificationTypeId=qual_type_id,#'3VG0EHWASUFRE500CC3BLPY5SRAOQH',
+                QualificationTypeId=qualifications[qual_type_name],#'3VG0EHWASUFRE500CC3BLPY5SRAOQH',
                 WorkerId=worker_id,
                 IntegerValue=value,
                 SendNotification=False
             )
             if self.check_response(response):
-                print('Assigned SERP qualification ' + str(value)+ ' to worker: ' + worker_id)
+                print('Assigned ' + qual_type_name + ' qualification ' + str(value)+ ' to worker: ' + worker_id)
 
             else:
                 print('assign_serp_qualification failed for worker: ' + worker_id)
@@ -108,14 +109,18 @@ class AMT_api:
             print('reject_assignment failed for assignment_id: ' + assignment_id)
 
     def accept_assignment(self, assignment_id, override_rejection = False ):
-        response = self.client.approve_assignment(
-            AssignmentId=assignment_id,
-            RequesterFeedback='',
-            OverrideRejection= override_rejection
-        )
-        if self.check_response(response):
-            print('Accepted assignment ' + assignment_id)
-        else:
+        try:
+            response = self.client.approve_assignment(
+                AssignmentId=assignment_id,
+                RequesterFeedback='',
+                OverrideRejection= override_rejection
+            )
+            if self.check_response(response):
+                print('Accepted assignment ' + assignment_id)
+            else:
+                print('accept_assignment failed for assignment_id: ' + assignment_id)
+        except  Exception as e:
+            print(e)
             print('accept_assignment failed for assignment_id: ' + assignment_id)
 
     def add_assignments_to_hit(self, hit_id, num_assignments ,token):
@@ -168,6 +173,104 @@ def pay_bonuses(transaction_file, payemnt_file):
                 #print(response)
 
 
+def fix_queries_list(conn_name, db_name ):
+    db = connect_to_db(conn_name)
+    dbcursor = db.cursor()
+    q = "SELECT user_id, queries FROM "+ db_name + ".user_data"
+    dbcursor.execute(q)
+    exp_data = dbcursor.fetchall()
+    update_params = []
+    for r in exp_data:
+        user_id = r[0]
+        queries = r[1]
+        if not queries:
+            continue
+        qlist = list(queries[1:-1].split(","))
+        new_q_set = set()
+        for q in qlist:
+            #sq = q.replace("'",'')
+            sq = "'" + q + "'"
+            new_q_set.add(sq)
+        new_q_str = '('
+        for q in new_q_set:
+            new_q_str += q
+            new_q_str += ','
+        new_q_str = new_q_str[:-1] +')'
+        update_params.append([new_q_str, user_id])
+        update_query = "UPDATE " + db_name + ".user_data SET queries=\"" +new_q_str+ "\" WHERE `user_id`='"+user_id+"';"
+        print(update_query)
+       # dbcursor.execute(update_query)
+
+
+#    update_query = "UPDATE `serp_shared`.`user_data` SET `queries`=%s WHERE (`user_id`=%s);"
+#    dbcursor.executemany(update_query, update_params)
+
+
+
+def get_duplicate_users():
+    db = connect_to_db('shared')
+    dbcursor = db.cursor()
+    q = "SELECT user_id, queries  FROM serp_shared.user_data"
+    dbcursor.execute(q)
+    exp_data = dbcursor.fetchall()
+    for r in exp_data:
+        user_id = r[0]
+        queries = r[1]
+        qlist = list(queries[1:-1].split(","))
+        new_q_set = set()
+        for q in qlist:
+            sq = q.replace("'",'')
+            if sq in new_q_set:
+                print(user_id)
+                print(qlist)
+                break
+            else:
+                new_q_set.add(sq)
+
+
+def is_worker_done(queries, all_qs):
+    q_set = set(queries[1:-1].split(","))
+    done = True
+    for q in all_qs:
+        if "'" not in q:
+            q = "'" + q + "'"
+        if q not in q_set:
+            done = False
+        if not done:
+            break
+    return done
+
+
+def get_done_workers(worker_ids = None, all_qs=TREATMENT_CORRECT_ANSWERS.keys()):
+    done_workers = []
+    db = connect_to_db('shared')
+    dbcursor = db.cursor()
+    if worker_ids:
+        q = "SELECT user_id, queries  FROM serp_shared.user_data where user_id in " + worker_ids
+    else:
+        q = "SELECT user_id, queries  FROM serp_shared.user_data"
+    dbcursor.execute(q)
+    exp_data = dbcursor.fetchall()
+    for r in exp_data:
+        user_id = r[0]
+        queries = r[1]
+        done = is_worker_done(queries,all_qs)
+        if done:
+            done_workers.append(user_id)
+    print("done workers:" + str(done_workers))
+    return done_workers
+
+
+def set_SERP_done_qual(all_qs):
+    done_workers = get_done_workers(all_qs=all_qs)
+    api = AMT_api()
+
+    for u in done_workers:
+        api.assign_serp_qualification(u,'SERP done', 1)
+
+
+
+
 def set_blacklist_qual_for_all(db_name):
     db = connect_to_db(db_name)
     dbcursor = db.cursor()
@@ -205,15 +308,19 @@ def set_blacklist_qual_for_all(db_name):
     api = AMT_api()
 
     for u in black_list:
-        api.assign_serp_qualification(u,BLACK_LIST_QUAL, 1)
+        api.assign_serp_qualification(u,'SERP black list', 1)
 
 
 
 
 if __name__ == "__main__":
-    set_blacklist_qual_for_all('local')
-    #api = AMT_api()
-    #api.add_assignments_to_hit('3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T', 7, ' 3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T3')
+#    set_blacklist_qual_for_all('local')
+    #fix_queries_list('tamar','serp')
+    #qs = {'Does Omega Fatty Acids treat Adhd', 'Does Ginkgo Biloba treat tinnitus'}
+
+    #set_SERP_done_qual(all_qs=qs)
+    api = AMT_api()
+    api.add_assignments_to_hit('3AFT28WXLF3MBKQ98SHKZDMP73TOI8', 30, ' 3AFT28WXLF3MBKQ98SHKZDMP73TOI8')
 
 
     #assign_quals()

@@ -7,9 +7,9 @@ from datetime import date
 import xmltodict
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
-    get_links_per_worker, get_workers_with_no_link, filter_user, TREATMENT_CORRECT_ANSWERS, filter_user_new, \
+    get_links_per_worker, get_workers_with_no_link,  filter_user_new, \
     get_time_spent
-from turk_api import AMT_api, BLACK_LIST_QUAL, DONE_WORKERS_QUAL, SERP
+from turk_api import AMT_api, get_done_workers
 
 BATCH_FILE_PREFIX = '../resources/batch results/batch'
 NUM_MNUTES_FOR_BONUS = 2
@@ -76,39 +76,21 @@ def process_bonus(batch_number, worker_ids):
             writer.writerow({'WorkerId': worker_id})
 
 
-def get_done_workers(worker_ids):
-    done_workers = []
-    db = connect_to_db('shared')
-    dbcursor = db.cursor()
-    q = "SELECT user_id, queries  FROM serp_shared.user_data where user_id in " + worker_ids
-    dbcursor.execute(q)
-    exp_data = dbcursor.fetchall()
-    for r in exp_data:
-        user_id = r[0]
-        queries = r[1]
-        q_set = set(queries[1:-1].split(","))
-        all_qs = TREATMENT_CORRECT_ANSWERS.keys()
-        done = True
-        for q in all_qs:
-            if q not in q_set:
-                done = False
-            if not done:
-                break
-        if done:
-            done_workers.append(user_id)
-    return done_workers
 
 
-def process_workers(dbcursor, worker_ids):
+def process_workers(dbcursor, worker_ids, start_date):
     bonus_workers = set()
     num_links_per_workers = get_links_per_worker(dbcursor, worker_ids)
-    sql_exp_data_query_string = "SELECT *  FROM serp.exp_data where user_id in " + worker_ids
+    sql_exp_data_query_string = "SELECT *  FROM serp.exp_data where user_id in " + worker_ids + " and start >= '" + start_date + "'"
+    print(sql_exp_data_query_string)
     dbcursor.execute(sql_exp_data_query_string)
     exp_data = dbcursor.fetchall()
     black_list = []
+    worker_to_exp = {}
     for r in exp_data:
         exp_id = r[0]
         worker_id = r[1]
+        worker_to_exp[worker_id] = exp_id
         start = r[7]
         end = r[8]
         answer_treatment = r[12].strip()
@@ -127,7 +109,7 @@ def process_workers(dbcursor, worker_ids):
             if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id]) >= NUM_LINKS_FOR_BONUS:
                 bonus_workers.add(worker_id)
     done_workers = get_done_workers(worker_ids)
-    return done_workers, black_list, bonus_workers
+    return worker_to_exp, done_workers, black_list, bonus_workers
 
 
 def get_paid_workers():
@@ -139,7 +121,7 @@ def get_paid_workers():
     return paid_workers
 
 
-def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from_batch, to_batch = None, bonus_payment = 0, update_files = False):
+def process_survery_code(api, amazon_results, ids_sql_string, start_date, base_payment, from_batch, to_batch = None, bonus_payment = 0, update_files = False):
 
     today = date.today()
 
@@ -148,29 +130,34 @@ def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from
     db = connect_to_db('biu')
     mycursor = db.cursor()
 
-    done_workers, black_list, bonus_dict = process_workers(mycursor,ids_sql_string)
+    worker_to_exp, done_workers, black_list, bonus_dict = process_workers(mycursor,ids_sql_string, start_date)
     for u in black_list:
-        api.assign_serp_qualification(u, BLACK_LIST_QUAL, 1)
+        api.assign_serp_qualification(u, 'SERP black list', 1)
     for u in done_workers:
-        api.assign_serp_qualification(u, DONE_WORKERS_QUAL, 1)
+        api.assign_serp_qualification(u, 'SERP done', 1)
 #    if bonus_payment:
 #        bonus_dict = get_bonuses_workers(mycursor,ids_sql_string)
     print(str(len(bonus_dict)) + ' bonuses')
-
+    exp_id_string = str(list(worker_to_exp.values()))
+    exp_id_string = '(' + exp_id_string[1:-1] + ')'
     #sql_query_string = "SELECT * FROM serp.user_config where amazon_id in " + ids_sql_string
-    sql_query_string = "SELECT * FROM serp.exp_verification_codes where amazon_id in " + ids_sql_string
+    #sql_query_string = "SELECT * FROM serp.exp_verification_codes where amazon_id in " + ids_sql_string + " and exp_id in " + exp_id_string
+    sql_query_string = "SELECT * FROM serp.exp_verification_codes where exp_id in " + exp_id_string
+    print(sql_query_string)
 
     mycursor.execute(sql_query_string)
     dbresult = mycursor.fetchall()
     for r in dbresult:
+        exp_id = r[0]
         amazon_id_db = r[1]
+        assert(worker_to_exp[amazon_id_db] == exp_id)
         survey_code_db = r[2]
         answer = amazon_results[amazon_id_db]['Answer']
         answer_dict = xmltodict.parse(answer)
         worker_supplied_survey_code = answer_dict['QuestionFormAnswers']['Answer']['FreeText']
 #        worker_supplied_survey_code = amazon_results[amazon_id_db]['Answer.surveycode']
         assignment_id = amazon_results[amazon_id_db]['AssignmentId']
-        api.assign_serp_qualification(amazon_id_db, SERP, 1)
+        api.assign_serp_qualification(amazon_id_db, 'SERP', 1)
         if worker_supplied_survey_code == survey_code_db:
             workers_to_pay.append(amazon_id_db)
             api.accept_assignment(assignment_id)
@@ -179,7 +166,7 @@ def process_survery_code(api, amazon_results, ids_sql_string, base_payment, from
         else:
             workers_not_finished.append(amazon_id_db)
             api.reject_assignment(assignment_id, 'The survey code entered does not match our records')
-            api.assign_serp_qualification(amazon_id_db, BLACK_LIST_QUAL, 1)
+            api.assign_serp_qualification(amazon_id_db, 'SERP black list', 1)
 
     if to_batch:
         amazon_report_csv_filename = BATCH_FILE_PREFIX + str(from_batch) + '_to_' + str(to_batch) + '_approve_reject_report.csv'
@@ -244,12 +231,12 @@ def get_worker_id_list_for_hit(api, hit_id):
     return amazon_results, ids_sql_string
 
 
-def process_hit(hit_id):
+def process_hit(hit_id, start_date):
     api = AMT_api()
     payment = 1.4
     bonus = 1.4
     amazon_results, ids_sql_string = get_worker_id_list_for_hit(api, hit_id)
-    process_survery_code(api, amazon_results, ids_sql_string, payment, hit_id, bonus, True)
+    process_survery_code(api, amazon_results, ids_sql_string, start_date, payment, hit_id, bonus, True)
 
 def assign_qual():
     hit_id = '3JHB4BPSFKAWLVAMJB3BBPIM1RUQ9T'
@@ -281,7 +268,7 @@ def print_workers_with_no_links(from_batch=None, to_batch=None):
     else:
         ignore = get_workers_with_no_link(dbcursor)
     if len(ignore) == 0:
-        print('All workers entered at least one link')
+        print('All workers entered at least one link', )
     else:
         print(ignore)
 #
@@ -291,6 +278,7 @@ def add_assignemnts(num):
     myobj = {'HITId': '3VO4XFFP15NS7CMT4E5RXTRG6SXQ7Q', 'HITNumberOfAdditionalAssignments':str(num)}
 
     x = requests.post(url, data=myobj)
+
 
     print(x.text)
 
@@ -302,7 +290,24 @@ if __name__ == "__main__":
     #process_batch(18,21)
     #process_batch(22,26)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    process_hit('3YGYP13641AHMYTGX0BGYGNB4AURNT')
+    process_hit('3AFT28WXLF3MBKQ98SHKZDMP73TOI8','2022-03-09 00:00:00')
 
+    #db = connect_to_db('biu')
+    #dbcursor = db.cursor()
+    #done_workers, black_list, bonus_dict = process_workers(dbcursor,"('A1H48DL2CMYH7U','A1I7H6RDJS4EKN','A1OZPLHNIU1519','A1PTH9KTRO06EG','A21W69Z63UQP69','A29IBNSV45WIMQ','A2Z94V60G6K26P','AQXSE8R0MDUWN','ARJ7XWSK0Y8FJ')", '2022-03-08 00:58:07')
+    #print('bonus = ' + str(bonus_dict))
+    #print(black_list)
+
+    #api = AMT_api()
+    #assignemnts = ['3TPWUS5F8925P9B5X6HAUNX8IXRWC8','3ZV9H2YQQD8HC9FM4D691KTECKF3WI','3MMN5BL1WZ5L7XL80B0MSMRNEI0M39','3QY5DC2MXRLZ0H6AT8SAK5XEUUDFU8','3NG53N1RLVKDTXOR48NA07TTZ988PO','324G5B4FB39652FODIGE76WQGHS07O','3Y9N9SS8LYCI33FVNI1J9W4T54FD3P','3UNH76FOCS6MN0IWPWTCIGN0NJZYMV','3GFK2QRXX9IKQO2QIWU2GHRYQGA5WE']
+    #api.send_bonus('AQXSE8R0MDUWN', '3UNH76FOCS6MN0IWPWTCIGN0NJZYMV', '3UNH76FOCS6MN0IWPWTCIGN0NJZYMV')
+    #api.send_bonus('A1PTH9KTRO06EG', '3QY5DC2MXRLZ0H6AT8SAK5XEUUDFU8', '3QY5DC2MXRLZ0H6AT8SAK5XEUUDFU8')
+    #api.send_bonus('A1OZPLHNIU1519', '3MMN5BL1WZ5L7XL80B0MSMRNEI0M39', '3MMN5BL1WZ5L7XL80B0MSMRNEI0M39')
+
+    #api.send_bonus('A1I7H6RDJS4EKN', '3ZV9H2YQQD8HC9FM4D691KTECKF3WI', '3ZV9H2YQQD8HC9FM4D691KTECKF3WI')
+    #for a in assignemnts:
+    #    api.accept_assignment('3ZV9H2YQQD8HC9FM4D691KTECKF3WI', override_rejection = True)
+
+ #   api.send_bonus('A1I7H6RDJS4EKN', '3ZV9H2YQQD8HC9FM4D691KTECKF3WI', '3ZV9H2YQQD8HC9FM4D691KTECKF3WI')
 
 

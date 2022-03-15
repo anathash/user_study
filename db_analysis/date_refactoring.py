@@ -30,6 +30,7 @@ def refactor_exp(db_name):
     dbcursor.executemany(q, end_update)
     db.commit()
 
+
 def refactor_actions(db_name):
     db = connect_to_db(db_name)
     dbcursor = db.cursor()

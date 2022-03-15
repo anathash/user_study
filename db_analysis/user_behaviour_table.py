@@ -3,6 +3,7 @@ import math
 import shutil
 from collections import Counter
 from datetime import datetime
+from statistics import mean
 
 import scipy.stats as stats
 import statsmodels
@@ -10,10 +11,11 @@ from statsmodels.stats.weightstats import ttest_ind
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
     TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats, \
-    string_to_datetime, get_server_url, get_links_stats_by_exp, get_time_spent, filter_user_new
+    string_to_datetime, get_links_stats_by_exp, get_time_spent, filter_user_new
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
 #BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
-
+PRINT_ORDER = ['Y','AY','M','AM','N','AN']
+#PRINT_ORDER = ['Y','AY','SY','M','AM','SM','N','AN','SN']
 
 def write_to_file(exp_data, filtered_users, limit, append = False):
 
@@ -538,13 +540,19 @@ def get_posterior_bias(row, ctr_dict):
         ctr = ctr_dict['No ads']
         ad = False
     for i in range(0, len(sequence)):
-        if ad and i ==0:
+        if ad and i == 0:
             continue
         v = sequence[i]
         bias[v] += float(ctr[i])
 
     bias_sorted = sorted(bias.items(), key=lambda kv: kv[1], reverse=True)  # sort newest_first
-    print(sequence + ',' + str(bias['Y']) + ',' + str(bias['M']) + ',' + str(bias['N']) + ',' + bias_sorted[0][0])
+ #   print(sequence + ',' + str(bias['Y']) + ',' + str(bias['M']) + ',' + str(bias['N']) + ',' + bias_sorted[0][0])
+    if sequence.startswith('S') or sequence.startswith('A'):
+        prefix1 = sequence[1]
+    else:
+        prefix1 = sequence[0]
+    if bias_sorted[0][0] != prefix1:
+        print(prefix1 != bias_sorted[0][0])
     if ad:
         if bias_sorted[0][1] == 0:
             return sequence[0]
@@ -675,9 +683,11 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
     link_visibility = {x:0 for x in range(1,11)}
     link_visibility_no_ads = {x:0 for x in range(1,11)}
     link_visibility_S = {x: 0 for x in range(1, 11)}
+    link_visibility_SY = {x: 0 for x in range(1, 11)}
     link_visibility_SM = {x: 0 for x in range(1, 11)}
     link_visibility_SN = {x: 0 for x in range(1, 11)}
     link_visibility_A = {x: 0 for x in range(1, 11)}
+    link_visibility_AY = {x: 0 for x in range(1, 11)}
     link_visibility_AM = {x: 0 for x in range(1, 11)}
     link_visibility_AN = {x: 0 for x in range(1, 11)}
 
@@ -695,6 +705,8 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
                 link_visibility[i] += 1
                 if config.startswith('A'):
                     link_visibility_A[i] += 1
+                    if config.startswith('AY'):
+                        link_visibility_AY[i] += 1
                     if config.startswith('AM'):
                         link_visibility_AM[i] += 1
                     if config.startswith('AN'):
@@ -702,6 +714,8 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
 
                 elif config.startswith('S'):
                     link_visibility_S[i] += 1
+                    if config.startswith('SY'):
+                        link_visibility_SY[i] += 1
                     if config.startswith('SM'):
                         link_visibility_SM[i] += 1
                     if config.startswith('SN'):
@@ -752,9 +766,11 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
         results['link_visibility'] = {'link' + str(x): link_visibility[x] for x in range(1,11) }
         results['link_visibility_no_ads'] = {'link' + str(x): link_visibility_no_ads[x] for x in range(1,11) }
         results['link_visibility_A'] = {'link' + str(x): link_visibility_A[x] for x in range(1,11) }
+        results['link_visibility_AY'] = {'link' + str(x): link_visibility_AY[x] for x in range(1,11) }
         results['link_visibility_AM'] = {'link' + str(x): link_visibility_AM[x] for x in range(1, 11)}
         results['link_visibility_AN'] = {'link' + str(x): link_visibility_AN[x] for x in range(1, 11)}
         results['link_visibility_S'] = {'link' + str(x): link_visibility_S[x] for x in range(1,11) }
+        results['link_visibility_SY'] = {'link' + str(x): link_visibility_SY[x] for x in range(1,11) }
         results['link_visibility_SM'] = {'link' + str(x): link_visibility_SM[x] for x in range(1,11) }
         results['link_visibility_SN'] = {'link' + str(x): link_visibility_SN[x] for x in range(1,11) }
 
@@ -764,16 +780,32 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
             for i in range(1, 11):
                 fieldnames.append('link' + str(i))
 
-
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            for config, counters in results.items():
-                row = {'sequence': config}
-                row.update(counters)
-                for answer in possible_answers:
-                    if answer not in row:
-                        row[answer] = 0
-                writer.writerow(row)
+
+            for config in PRINT_ORDER:
+                print_row_to_file(writer, config, results, possible_answers)
+            writer.writerow({})
+
+            for config in PRINT_ORDER:
+                print_row_to_file(writer, config+'_NORM', results, possible_answers)
+            writer.writerow({})
+            link_vis = {x: y for x, y in results.items() if 'link_visibility' in x}
+
+            for config, counters in link_vis.items():
+                print_row_to_file(writer, config, results, possible_answers)
+
+            writer.writerow({})
+
+
+def print_row_to_file(writer, config, results, possible_answers):
+    counters = results[config]
+    row = {'sequence': config}
+    row.update(counters)
+    for answer in possible_answers:
+        if answer not in row:
+            row[answer] = 0
+    writer.writerow(row)
 
 
 def gen_rank_order(limit, filter_field = None, filter_func= None, filter_title = None, ):
@@ -1046,9 +1078,14 @@ if __name__ == "__main__":
     #sequence_scores()
     #ctr_per_viewpoint()
     #create_response_prediction_features_vectors()
-    generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
+    #generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None)
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Xclude Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag') == False)
+    extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
+   # extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+   # extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
     #extract_answers_from_behaviour_table(prefix=1, limit=None)
-    #extract_answers_from_behaviour_table(prefix = False, posterior_bias=True, limit=None)
+#
     #extract_clicks_from_behaviour_table(prefix = False, posterior_bias=True, limit=None)
     #extract_answers_from_behaviour_table(prefix=2, limit=None)
     #get_user_data()

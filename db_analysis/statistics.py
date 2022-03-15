@@ -270,6 +270,7 @@ def chi_inconclusive_bias():
 
 def chi_cont(results, row_index, col_index=['Y','M','N']):
   #  results = [r1, r2]
+    print(results)
     F = np.array(results)
 
 
@@ -278,14 +279,14 @@ def chi_cont(results, row_index, col_index=['Y','M','N']):
     df = pd.DataFrame(data=F, index=row_index, columns=col_index)
 
 
-    table = sm.stats.Table(df)
+ #   table = sm.stats.Table(df)
 
 
   #  print('table.cumulative_oddsratios')
   #  print(table.cumulative_oddsratios)
 
-    print('table.chi2_contribs')
-    print(table.chi2_contribs)
+#    print('table.chi2_contribs')
+#    print(table.chi2_contribs)
 
 
     #print('table.local_oddsratios')
@@ -297,11 +298,11 @@ def chi_cont(results, row_index, col_index=['Y','M','N']):
 #    print('resid_pearson Residuals')
 
 
-    print(table)
-    print('resid_pearson Residuals')
-    print(table.resid_pearson)
-    print('standardized_resids Residuals')
-    print(table.standardized_resids)
+  #  print(table)
+  #  print('resid_pearson Residuals')
+  #  print(table.resid_pearson)
+  #  print('standardized_resids Residuals')
+  #  print(table.standardized_resids)
 
     obs = np.array(results)
     t = chi2_contingency(obs)
@@ -311,16 +312,24 @@ def chi_cont(results, row_index, col_index=['Y','M','N']):
     print('test statistics:' + str(t[0]))
     print('p-value:' + str(t[1]))
     print('df ' + str(t[2]))
-    print('expected' + str(t[3]))
+    e = 'expected' + str(t[3])
+    print(e)
+    sig = t[1] <= 0.05
+    if sig:
+        result = 'Chi test significant'
+    else:
+        result = 'Chi test NOT significant'
 
 
-    r = power_divergence(obs, lambda_="log-likelihood")
-    print('power_divergence')
-    print(r)
+    #r = power_divergence(obs, lambda_="log-likelihood")
+    #print('power_divergence')
+    #print(r)
 
-    if len(col_index) == 2:
+    if len(col_index) == 2 and sig:
         t = sm.stats.Table2x2(np.array(df))
         print(t.summary())
+
+    return  result
 
 def chi_no_ads():
     results = [[26,13,10], [17,23,12],[10,20,17]]
@@ -826,16 +835,56 @@ def heatmap():
     plt.show()
 #    plt.savefig(GRAPH_DIR + 'heatmap_C_1_rec.pdf')
 
+def chi_3way(r1,r2,l1,l2, to_print = False):
+    print(l1 + '-' + l2)
+    result = chi_cont([r1,r2],row_index=[l1,l2],col_index=['Y','M','N'])
+    print(result)
+    print('-------------------------------------------------------------')
+    print(l1 + '-' + l2 + ' Yes')
+    result = chi_cont([[r1[0],r1[1]+r1[2]], [r2[0],r2[1]+r2[2]]], row_index=[l1, l2], col_index=['Y', 'M+N'])
+    print(result)
+    print(l1 + '-' + l2 + ' Maybe')
+    result = chi_cont([[r1[1],r1[0]+r1[2]], [r2[1],r2[0]+r2[2]]], row_index=[l1, l2], col_index=['M', 'Y+N'])
+    print(result)
+    print(l1 + '-' + l2 + ' No')
+    result = chi_cont([[r1[2], r1[0] + r1[1]], [r2[2], r2[0] + r2[1]]], row_index=[l1, l2], col_index=['N', 'Y+m'])
+    print(result)
+
+
+def results_chi_stats():
+    #Y-AY-SY
+
+    #Y-AY
+    chi_3way([52, 24,21], [53, 35,11],'Y','AY')
+    chi_3way([52, 24,21], [42, 33,20],'Y','SY')
+
+    chi_3way([31, 45,22], [30, 45,22],'M','AM')
+    chi_3way([31, 45,22], [40, 40,20],'M','SM')
+
+    chi_3way([27, 34, 34], [21, 34,44],'N','AN')
+    chi_3way([27, 34, 34], [23, 25,48],'N','SN')
+
 if __name__ == "__main__":
+    chi_cont([[55, 45], [45, 55]], row_index=['Y', 'AY'],col_index=['1','2'])
+
+    #chi_cont([[52, 24,21], [53, 35,11],[42, 33,20]], row_index=['Y','AY','SY'])
+    #chi_cont([[31, 45,22], [30, 45,22],[40, 40,20]], row_index=['M','AM','SM'])
+    #chi_cont([[27, 34, 34], [21, 34,44],[23, 25,48]], row_index=['N','AN','SN'])
+    #results_chi_stats()
+    #chi_cont([[36,36+28], [50,50]], row_index=['N', 'SN'], col_index=['N', 'M + Y'])
+    #chi_cont([[36,36+28], [44,56]], row_index=['N', 'AN'], col_index=['N', 'M + Y'])
+    #chi_cont([[53,47], [42,58]], row_index=['Y', 'SY'], col_index=['Y', 'M + N'])
+    #chi_cont([[38,7,3], [162,53,37]], row_index=['r1', 'r2'], col_index=['c1', 'c2','c3'])
+
+
     #ttest_from_count(c1=11, t1=32, c2=4, t2=60)
     #ttest_from_count(c1=11, t1=32, c2=33, t2=172)
-    heatmap()
-    #chi_cont([[43,51+34], [15,36+26]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
-    #chi_cont([[43,51+34], [15,36+26]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
-    #chi_cont([[34,51+43],[26,36+15]], row_index=['SM', 'M'], col_index=['N', 'Y+M'])
-    #chi_cont([[51,34+43],[36,26+15]], row_index=['SM', 'M'], col_index=['M', 'Y+N'])
-    #chi_cont([[15,36,26],[43,51,34]], row_index=['M', 'SM'], col_index=['Y', 'M','N'])
-    #chi_cont([[19,25,65],[20,51,34]], row_index=['M', 'SM'], col_index=['Y', 'M','N'])
+#    heatmap()
+   # chi_cont([[43,51+34], [15,36+26]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
+   # chi_cont([[34,51+43],[26,36+15]], row_index=['SM', 'M'], col_index=['N', 'Y+M'])
+   # chi_cont([[51,34+43],[36,26+15]], row_index=['SM', 'M'], col_index=['M', 'Y+N'])
+   # chi_cont([[15,36,26],[43,51,34]], row_index=['M', 'SM'], col_index=['Y', 'M','N'])
+   # chi_cont([[19,25,65],[20,51,34]], row_index=['M', 'SM'], col_index=['Y', 'M','N'])
 
 # res = chi2_contingency([[16,20,20],[11,18,23]])
     #kendel_tau('ctr_viewpoint_S')
