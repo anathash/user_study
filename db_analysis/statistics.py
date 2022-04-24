@@ -1,9 +1,9 @@
 import csv
+import statistics
 from math import log
 import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
-from numpy.core import mean
 
 from sklearn.feature_selection import VarianceThreshold
 from statsmodels.stats.weightstats import ttest_ind
@@ -22,6 +22,8 @@ import pandas as pd
 from scipy.stats import chisquare, chi2_contingency, fisher_exact, power_divergence
 
 from plot_graphs import GRAPH_DIR
+from user_behaviour_table import get_filename
+from utils import connect_to_db
 
 
 def anova_from_file(fname, metric_field, group_by):
@@ -864,8 +866,76 @@ def results_chi_stats():
     chi_3way([27, 34, 34], [21, 34,44],'N','AN')
     chi_3way([27, 34, 34], [23, 25,48],'N','SN')
 
+
+def get_user_stats():
+    time_spent = []
+    num_links = []
+    users_str = '('
+    fname = get_filename('user_behaviour', None)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            time_spent.append(float(row['search_time_exp']))
+            num_links.append(float(row['num_links_pressed']))
+            users_str += "'" + row['WorkerId'] + "'" + ','
+
+    print('---------------NUM LINKS------------------')
+    print('Num links min: ' + str(min(num_links)))
+    print('Num links max: ' + str(max(num_links)))
+    print ('Num links mean: ' + str(np.mean(num_links)))
+    print ('Num links stdev: ' + str(np.std(num_links)))
+
+    print('---------------EXP TIME------------------')
+    print ('Exp time min: ' + str(min(time_spent)))
+    print ('Exp time max: ' + str(max(time_spent)))
+
+    print ('Exp time mean: ' + str(np.mean(time_spent)))
+    print ('Exp time stdev: ' + str(np.std(time_spent)))
+
+    users_str = users_str[:-1]+')'
+    db = connect_to_db('shared')
+    mycursor = db.cursor()
+    # links = get_links_entered_in_exps(mycursor)
+    exp_data_query_string = "SELECT * FROM serp_shared.user_data where user_id in " + users_str;
+    mycursor.execute(exp_data_query_string)
+    results = mycursor.fetchall()
+    age_list = []
+    gender_dict = {'female':0,'male':0,'other':0}
+    education_level_dict = {'high':0,'low':0}
+
+    for x in results:
+        age = x[1]
+        gender = x[2]
+        education_level = x[3]
+        if education_level == "Master's degree" or education_level == "Bachelor's degree":
+            education_level_dict['high'] += 1
+        else:
+            education_level_dict['low'] += 1
+        age_list.append(int(age))
+        gender_dict[gender] += 1
+
+    num_users = len(age_list)
+    print('---------------Num responses------------------')
+    print('Num responses: ' + str(num_users) )
+    print('---------------AGE------------------')
+    print('Age min: ' + str(min(age_list)))
+    print('Age max: ' + str(max(age_list)))
+    print('Age mean: ' + str(np.mean(age_list)))
+    print('Age stdev: ' + str(np.std(age_list)))
+
+    print('---------------GENDER------------------')
+    print('Men"' + str(gender_dict['male']/num_users))
+    print('Women: ' + str(gender_dict['female']/num_users))
+    print('Other: ' + str(gender_dict['other']/num_users))
+
+    print('---------------EDUCATION_LEVEL------------------')
+    print('higher_education:' + str(education_level_dict['high'] / num_users))
+    print('lower education: ' + str(education_level_dict['low'] / num_users))
+
+
 if __name__ == "__main__":
-    chi_cont([[55, 45], [45, 55]], row_index=['Y', 'AY'],col_index=['1','2'])
+    get_user_stats()
+    #chi_cont([[31, 45], [39, 42]], row_index=['Y', 'AY'],col_index=['1','2'])
 
     #chi_cont([[52, 24,21], [53, 35,11],[42, 33,20]], row_index=['Y','AY','SY'])
     #chi_cont([[31, 45,22], [30, 45,22],[40, 40,20]], row_index=['M','AM','SM'])

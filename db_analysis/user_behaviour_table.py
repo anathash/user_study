@@ -3,7 +3,6 @@ import math
 import shutil
 from collections import Counter
 from datetime import datetime
-from statistics import mean
 
 import scipy.stats as stats
 import statsmodels
@@ -11,11 +10,11 @@ from statsmodels.stats.weightstats import ttest_ind
 
 from db_analysis.utils import connect_to_db, get_time_diff, get_time_diff_from_actions, \
     TREATMENT_CORRECT_ANSWERS, CONDITION_CORRECT_ANSWERS, get_links_entered_by_worker, filter_user, get_links_stats, \
-    string_to_datetime, get_links_stats_by_exp, get_time_spent, filter_user_new
+    string_to_datetime, get_links_stats_by_exp, get_time_spent, filter_user_new, unsatisfactory
 from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
 #BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
-PRINT_ORDER = ['Y','AY','M','AM','N','AN']
-#PRINT_ORDER = ['Y','AY','SY','M','AM','SM','N','AN','SN']
+#PRINT_ORDER = ['Y','AY','M','AM','N','AN']
+PRINT_ORDER = ['Y','AY','SY','M','AM','SM','N','AN','SN']
 
 def write_to_file(exp_data, filtered_users, limit, append = False):
 
@@ -144,6 +143,28 @@ def get_latest_date(limit = None):
             if not latest_date or start_date > latest_date:
                 latest_date = start_date
     return latest_date
+
+def failed_attention_checks(db_name):
+    counter = 0
+    db = connect_to_db(db_name)
+    mycursor = db.cursor()
+    # links = get_links_entered_in_exps(mycursor)
+    exp_data_query_string = "SELECT * FROM serp.exp_data"
+    mycursor.execute(exp_data_query_string)
+    exp_data = {}
+    filtered_users = []
+    results = mycursor.fetchall()
+    for x in results:
+        start = x[7]
+        end = x[8]
+        answer_treatment = x[12].strip()
+        answer_condition = x[13].strip()
+        query = x[5]
+        filter_msg = filter_user_new(x[1], query, answer_treatment, answer_condition, start, end, x[9], x[11])
+
+        if (filter_msg == 'treatment answer error') or (filter_msg == 'condition_answer answer error'):
+            counter+=1
+    print(counter)
 
 
 def generate_user_behaviour_table(limit = None, db_name = 'local', append_from_last = True, filter_users = True, add_time_diff_actions = False):
@@ -669,6 +690,28 @@ def extract_clicks_from_behaviour_table(posterior_bias, prefix = None, filter_fu
                         row[answer] = 0
                 writer.writerow(row)
 
+
+def remove_duplicate_workers():
+    fname = get_filename('user_behaviour', None)
+    workers = {}
+    rows = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        fieldnames = reader.fieldnames
+        for row in reader:
+            worker_id = row['WorkerId']
+            d = string_to_datetime(row['start_time'])
+            if worker_id not in workers or d < workers[worker_id]:
+                rows[d] = row
+                workers[worker_id] = d
+        fname_single = get_filename('user_behaviour_single_worker', None)
+        with open(fname_single, 'w', newline='',encoding='utf8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            soreted_entries = sorted(rows.items(), key=lambda kv: kv[0], reverse=True)  # sort newest_first
+            for (k,v) in soreted_entries:
+                writer.writerow(v)
+
 def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_func=None, filter_title=None, limit = None):
     results = dict()
     possible_answers = set()
@@ -797,6 +840,72 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
 
             writer.writerow({})
 
+
+
+def generate_ctr_dict_file(filter_func=None, filter_title=None, limit = None):
+    results = dict()
+    link_visibility = {'No ads':{x:0 for x in range(1,10)},'Direct Marketing Ads':{x:0 for x in range(1,11)},'Indirect Marketing Ads':{x:0 for x in range(1,11)}}
+    link_visibility_S = {'Y':{x: 0 for x in range(1, 11)},'M':{x: 0 for x in range(1, 11)},'N':{x: 0 for x in range(1, 11)}}
+    link_visibility_A = {'Y':{x: 0 for x in range(1, 11)},'M':{x: 0 for x in range(1, 11)},'N':{x: 0 for x in range(1, 11)}}
+
+    clicks ={'No ads':{x:0 for x in range(1,10)},'Direct Marketing Ads':{x:0 for x in range(1,11)},'Indirect Marketing Ads':{x:0 for x in range(1,11)}}
+    clicks_S ={'Y':{x: 0 for x in range(1, 11)},'M':{x: 0 for x in range(1, 11)},'N':{x: 0 for x in range(1, 11)}}
+    clicks_A ={'Y':{x: 0 for x in range(1, 11)},'M':{x: 0 for x in range(1, 11)},'N':{x: 0 for x in range(1, 11)}}
+
+    results['sum_links'] = {'link' + str(i) :0 for i in range(1,11)}
+    fname = get_filename('user_behaviour', limit)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            if filter_title:
+                filter_ok = filter_func(row)
+                if not filter_ok:
+                    continue
+            config = row['sequence']
+            for i in range (1, len(config)+1):
+                link = 'link' + str(i)
+                click = int(row[link])
+                if config.startswith('A'):
+                    link_visibility['Direct Marketing Ads'][i] += 1
+                    clicks['Direct Marketing Ads'][i] += click
+                    prio_bias = config[1]
+
+                    clicks_A[prio_bias][i] += click
+                    link_visibility_A[prio_bias][i]+=1
+
+                elif config.startswith('S'):
+                    link_visibility['Indirect Marketing Ads'][i] += 1
+                    clicks['Indirect Marketing Ads'][i] += click
+                    prio_bias = config[1]
+
+                    clicks_S[prio_bias][i] += click
+                    link_visibility_S[prio_bias][i] += 1
+
+                else:
+                    link_visibility['No ads'][i] += 1
+                    clicks['No ads'][i] += click
+
+        write_ctr_file('ctr_all', clicks, link_visibility)
+        write_ctr_file('ctr_direct_marketing', clicks_A, link_visibility_A)
+        write_ctr_file('ctr_indirect_marketing', clicks_S, link_visibility_S)
+
+
+
+def write_ctr_file(name,clicks,link_visibility):
+    fname = get_filename(name, None)
+    with open(fname, 'w', newline='') as csvfile:
+        fieldnames = ['series']
+        for i in range(1, 11):
+            fieldnames.append('link' + str(i))
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for series in clicks.keys():
+            row = {'series': series}
+            r = len(link_visibility[series])
+            row_ctr = {'link' + str(x): clicks[series][x] / link_visibility[series][x] for x in range(1, r+1)}
+            row.update(row_ctr)
+            writer.writerow(row)
 
 def print_row_to_file(writer, config, results, possible_answers):
     counters = results[config]
@@ -1071,17 +1180,57 @@ def create_response_prediction_features_vectors(group):
             writer.writerow(f)
 
 
+def num_answer_stats():
+    answer_stats = {}
+    ctr_dict = gen_ctr_dict()
+    fname = get_filename('user_behaviour', None)
+    fieldnames = ['query','Y','M','N','AY','AM','AN','SY','SM','SN']
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            query = row['url'].split('-')[0]
+            if query not in answer_stats:
+                answer_stats[query] = {}
+            config = get_posterior_bias(row, ctr_dict)
+            if config not in answer_stats[query]:
+                answer_stats[query][config] = 0
+            answer_stats[query][config] +=1
+
+    with open('../resources/reports//answers_per_query.csv', 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for q, counts in answer_stats.items():
+            counts.update({'query':q})
+            writer.writerow(counts)
+
+
+
+def process_behaviour_table(posterior_bias, prefix=None, filter_func=None, filter_title=None, limit=None):
+    generate_ctr_dict_file()
+    num_answer_stats()
+    extract_answers_from_behaviour_table(posterior_bias, prefix, filter_func, filter_title, limit)
+
+
 if __name__ == "__main__":
+    #generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
+    #failed_attention_checks(db_name='biu')
+    process_behaviour_table(prefix=False, posterior_bias=True, limit=None)
+#    num_answer_stats()
+
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None)
+
+
+
+    #remove_duplicate_workers()
+
     #create_response_prediction_features_vectors('S')
     #create_response_prediction_features_vectors('A')
     #create_response_prediction_features_vectors('O')
     #sequence_scores()
     #ctr_per_viewpoint()
     #create_response_prediction_features_vectors()
-    #generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
-    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None)
     #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Xclude Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag') == False)
-    extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
    # extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
    # extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
     #extract_answers_from_behaviour_table(prefix=1, limit=None)

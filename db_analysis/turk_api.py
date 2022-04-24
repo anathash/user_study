@@ -5,6 +5,7 @@ import boto3
 import botocore
 import xmltodict
 
+
 from utils import connect_to_db, string_to_datetime, get_time_spent, test_users_names_prefix, unsatisfactory, \
     TREATMENT_CORRECT_ANSWERS
 
@@ -269,7 +270,14 @@ def set_SERP_done_qual(all_qs):
         api.assign_serp_qualification(u,'SERP done', 1)
 
 
-
+def set_serp_quall_all_from_table():
+    api = AMT_api()
+    fname = '../resources/reports//user_behaviour.csv'
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            worker_id = row['WorkerId']
+            api.assign_serp_qualification(worker_id, 'SERP', 1)
 
 def set_blacklist_qual_for_all(db_name):
     db = connect_to_db(db_name)
@@ -314,13 +322,14 @@ def set_blacklist_qual_for_all(db_name):
 
 
 if __name__ == "__main__":
+    set_serp_quall_all_from_table()
 #    set_blacklist_qual_for_all('local')
     #fix_queries_list('tamar','serp')
     #qs = {'Does Omega Fatty Acids treat Adhd', 'Does Ginkgo Biloba treat tinnitus'}
 
     #set_SERP_done_qual(all_qs=qs)
-    api = AMT_api()
-    api.add_assignments_to_hit('3AFT28WXLF3MBKQ98SHKZDMP73TOI8', 30, ' 3AFT28WXLF3MBKQ98SHKZDMP73TOI8')
+    #api = AMT_api()
+    #api.add_assignments_to_hit('3AFT28WXLF3MBKQ98SHKZDMP73TOI8', 30, ' 3AFT28WXLF3MBKQ98SHKZDMP73TOI8')
 
 
     #assign_quals()

@@ -6,10 +6,14 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.lines import Line2D
 from scipy.interpolate import make_interp_spline
 
 GRAPH_DIR = 'C:\\research\\falseMedicalClaims\\user study\\SIGIR ads\\'
 REPORTS_DIR = '../resources/reports/'
+
+color_cycle = ['blue','orange','green']
+markers = ['o','s','^']
 
 def plot_ex():
     # x axis values
@@ -161,7 +165,7 @@ def bar_charts_ads_effect():
     plt.savefig(GRAPH_DIR + 'ads_effect.pdf')
 
 
-def plot_ctr(input_file, title):
+def plot_ctr(input_file, title, mode):
     plt.xticks([i for i in range(1,11)])
     series = []
     plots = []
@@ -182,8 +186,11 @@ def plot_ctr(input_file, title):
                    xs.append(i+1)
             #vals = [float(x) for x in vals if x!=""]
             plots.append({'xs':xs, 'ys':ys})
-    for  p in plots:
+
+
+    for  i in range (0,len(plots)):
         #x = [i for i in range(1, len(y)+1)]
+        p = plots[i]
         x = p['xs']
         y = p['ys']
         print(x)
@@ -195,12 +202,18 @@ def plot_ctr(input_file, title):
         X_ = np.linspace(min(x), max(x), 500)
         Y_ = X_Y_Spline(X_)
 
-        plt.plot(X_, Y_)
+        plt.plot(X_, Y_, label=series[i], color=color_cycle[i])
+
+
         #plt.plot(x, y, '-o')
-        plt.scatter(x, y, marker='o');
+        plt.scatter(x, y, marker=markers[i],  color=color_cycle[i]);
 
-
-    plt.legend(series, fontsize=16)
+    custom_lines = [Line2D([0], [0], color=color_cycle[0],marker= markers[0]),
+                    Line2D([0], [0], color=color_cycle[1],marker= markers[1]),
+                    Line2D([0], [0], color=color_cycle[2],marker= markers[2])]
+    plt.legend(custom_lines, series)
+    #plt.legend(handles=handles, fontsize='x-large')
+    #    plt.legend(series, fontsize=16)
     # giving a title to my graph
     plt.title(title, fontsize=18)
 
@@ -212,8 +225,10 @@ def plot_ctr(input_file, title):
     #plt.title(title)
 
     # function to show the plot
-    #plt.show()
-    plt.savefig(GRAPH_DIR + input_file+'_py3.pdf')
+    if mode == 'show':
+        plt.show()
+    if mode == 'save':
+        plt.savefig(GRAPH_DIR + input_file+'.pdf')
 
 
 
@@ -232,6 +247,7 @@ if __name__ == "__main__":
     #plot_ctr('ctr_viewpoint_A','Direct Marketing Ads')
     #plot_ctr('ctr_viewpoint_S','Indirect Marketing Ads')
     #plot_ctr('ctr_viewpoint_no_ads','No Ads')
-    plot_ctr('ctr_all','CTR')
-    #plot_ctr('ctr_am_an','DM-DN')
+    #plot_ctr('ctr_all','CTR per ad configuration', mode='show')
+    #plot_ctr('ctr_direct_marketing','Direct Marketing CTR', mode='show')
+    plot_ctr('ctr_indirect_marketing','Indirect Marketing CTR', mode='show')
     #plot_ctr('ctr_sm_sn','IM-IN')
