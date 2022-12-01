@@ -1,5 +1,5 @@
 import csv
-import statistics
+import statistics_anal
 
 
 from db_analysis.utils import connect_to_db, get_time_diff
@@ -40,7 +40,7 @@ def time_spent_in_serp_sequence_feedback( query = None):
         writer.writeheader()
         for sequence, feedbacks in results.items():
             for feedback, times in feedbacks.items():
-                avg_time = statistics.mean(times)
+                avg_time = statistics_anal.mean(times)
                 avg_time_formatted = float("{:.2f}".format(avg_time))
                 row = {'sequence': sequence, 'feedback': feedback, 'avg_minutes_spent':avg_time_formatted}
                 writer.writerow(row)
@@ -76,7 +76,7 @@ def time_spent_in_serp(field, query = None):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for ft, times in results.items():
-            avg_time = statistics.mean(times)
+            avg_time = statistics_anal.mean(times)
             avg_time_formatted = float("{:.2f}".format(avg_time))
             row = {field: ft, 'avg_minutes_spent':avg_time_formatted}
             writer.writerow(row)

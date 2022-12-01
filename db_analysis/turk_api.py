@@ -322,14 +322,14 @@ def set_blacklist_qual_for_all(db_name):
 
 
 if __name__ == "__main__":
-    set_serp_quall_all_from_table()
+    #set_serp_quall_all_from_table()
 #    set_blacklist_qual_for_all('local')
     #fix_queries_list('tamar','serp')
     #qs = {'Does Omega Fatty Acids treat Adhd', 'Does Ginkgo Biloba treat tinnitus'}
 
     #set_SERP_done_qual(all_qs=qs)
-    #api = AMT_api()
-    #api.add_assignments_to_hit('3AFT28WXLF3MBKQ98SHKZDMP73TOI8', 30, ' 3AFT28WXLF3MBKQ98SHKZDMP73TOI8')
+    api = AMT_api()
+    api.add_assignments_to_hit('336OE47KI2LZ2ZJBYL7DVWP5PGRVWG', 25, '336OE47KI2LZ2ZJBYL7DVWP5PGRVWG1')
 
 
     #assign_quals()

@@ -1,5 +1,10 @@
 import csv
-import statistics
+
+import researchpy as researchpy
+import rp as rp
+from sklearn.metrics import cohen_kappa_score
+
+import statistics_anal
 from math import log
 import numpy as np
 import matplotlib.pylab as plt
@@ -22,9 +27,10 @@ import pandas as pd
 from scipy.stats import chisquare, chi2_contingency, fisher_exact, power_divergence
 
 from plot_graphs import GRAPH_DIR
-from user_behaviour_table import get_filename
+from user_behaviour_table import get_filename, LATEX_TABLE_ORDER, PRINT_ORDER
 from utils import connect_to_db
 
+ANSWERS_MAP = {'Y':1,'M':2,'N':3}
 
 def anova_from_file(fname, metric_field, group_by):
     df = pd.read_csv(fname)
@@ -45,21 +51,27 @@ def anova_from_count(y,m,n):
     print(F)
 
 
-def three_way_anova(c1,t1,g1,c2,t2,g2,t3,c3,g3):
-    pd.set_option("display.max_rows", None, "display.max_columns", None)
-
+def three_way_anova(c1,t1,g1,c2,t2,g2,c3,t3,g3):
+    print(g1 + ':' + str(c1/t1))
+    print(g2 + ':' + str(c2/t2))
+    print(g3 + ':' + str(c3/t3))
     a1 = [1]*c1 + [0]*(t1-c1)
     a2 = [1]*c2 + [0]*(t2-c2)
     a3 = [1]*c3 + [0]*(t3-c3)
+    three_way_anova_from_array(a1,g1,a2,g2,a3,g3,'CTR')
+
+def three_way_anova_from_array(a1,g1,a2,g2,a3,g3,measure):
+    pd.set_option("display.max_rows", None, "display.max_columns", None)
+
 
     d = []
     for g, a in {g1: a1, g2: a2, g3: a3}.items():
         for x in a:
-            d.append({'CTR': x, 'group': g})
+            d.append({measure: x, 'group': g})
 
     # df = pd.DataFrame({'score':[],'group': np.repeat(['a1', 'a2', 'a3'], repeats=10)})
     df = pd.DataFrame(d)
-    model = ols('CTR ~ group', data=df).fit()
+    model = ols(measure + ' ~ group', data=df).fit()
     anova_table =  sm.stats.anova_lm(model, typ=2)
     print(anova_table)
 
@@ -75,12 +87,24 @@ def three_way_anova(c1,t1,g1,c2,t2,g2,t3,c3,g3):
     print('POST HOC')
 
     df = pd.DataFrame(d)
-    print(df)
-    tukey = pairwise_tukeyhsd(endog=df['CTR'],
+ #   print(df)
+    tukey = pairwise_tukeyhsd(endog=df[measure],
                               groups=df['group'],
                               alpha=0.05)
 
     print(tukey)
+
+
+def paired_ttest(c1,t1,c2,t2, print_res = True):
+    a1 = [1] * c1 + [0] * (t1 - c1)
+    a2 = [1] * c2 + [0] * (t2 - c2)
+    t = scipy.stats.ttest_rel(a1, a2)
+    s = t.statistic
+    p = t.pvalue
+    if print_res:
+        print('s = ' + str(s) + ' p = ' + str(p))
+    return t
+
 
 def ttest_from_count(c1,t1,c2,t2):
     a1 = [1]*c1 + [0]*(t1-c1)
@@ -90,7 +114,11 @@ def ttest_from_count(c1,t1,c2,t2):
    #     print ('TTest significant, p < 0.05')
    # else:
    #     print('TTest NOT significant, p >= 0.05')
-    ttest = ttest_ind(a1, a2)
+    ttest = ttest_ind(a1, a2, alternative='larger')
+    print('larger')
+    print(ttest)
+    ttest = ttest_ind(a1, a2, alternative='smaller')
+    print('smaller')
     print(ttest)
 
 def link1_phys_ctr_test():
@@ -692,7 +720,7 @@ def logistic_regression(f, group, mode = 'clicks'):
     #r = model_fit.summary().as_csv()
     #print(model_fit.summary())
 
-    clf = LogisticRegression( solver='saga', penalty='l1', max_iter=400).fit(X, y)
+    clf = LogisticRegression( solver='saga', penalty='l1', max_iter=400, C=1.0).fit(X, y)
     #clf = LogisticRegression( solver='saga', penalty='l1', max_iter=400).fit(X, y)
     #clf = LogisticRegression(random_state=0).fit(X, y)
     print('Non Zero weights: ' + str(np.count_nonzero(clf.coef_)))
@@ -718,7 +746,7 @@ def weight_stats(group, answer, vals):
     mins = "%.2f" % round(min_v, 2)
     max_v =  max(vals)
     maxs = "%.2f" % round(max_v, 2)
-    avg = mean(vals)
+    avg = np.mean(vals)
     avgs ="%.2f" % round(avg, 2)
 #    print('min = ' + min(vals))
 #    print('max = ' + max(vals))
@@ -788,9 +816,8 @@ def heatmap():
 #              'DMarketing Ads, Y', 'Direct Marketing Ads, M', 'Direct Marketing Ads, N',
 #              'Indirect Marketing Ads, Y', 'Indirect Marketing Ads, M', 'Indirect Marketing Ads, N']
 
-    groups = ['No Ads, Y', 'No Ads, M', 'No Ads, N',
-              'DM, Y', 'DM, M', 'DM, N',
-              'IM, Y', 'IM, M', 'IM, N']
+
+
     plt.subplots(figsize=(10, 5))
     #features = generete_features_list()
     features = generete_features_list_ss2()
@@ -819,6 +846,9 @@ def heatmap():
     data.append(reg_res[1])
     data.append(reg_res[2])
 
+    groups = ['No Ads, Y', 'No Ads, M', 'No Ads, N',
+              'DM, Y', 'DM, M', 'DM, N',
+              'IM, Y', 'IM, M', 'IM, N']
 
     ax = sns.heatmap(data, xticklabels=features, yticklabels=groups, cmap='coolwarm')
     ax.tick_params(axis='x', which='major', labelsize=12)
@@ -836,6 +866,76 @@ def heatmap():
 
     plt.show()
 #    plt.savefig(GRAPH_DIR + 'heatmap_C_1_rec.pdf')
+
+
+def heatmap_per_answer_order(mode='clicks'):
+    params = {'mathtext.default': 'regular'}
+    plt.rcParams.update(params)
+    data_dict = {'O':{'Y':[],'M':[],'N':[]},'A':{'Y':[],'M':[],'N':[]},'S':{'Y':[],'M':[],'N':[]}}
+    data = []
+    print('NO ADS')
+    #    groups = ['No Ads, Y', 'No Ads, M', 'No Ads, N',
+    #              'DMarketing Ads, Y', 'Direct Marketing Ads, M', 'Direct Marketing Ads, N',
+    #              'Indirect Marketing Ads, Y', 'Indirect Marketing Ads, M', 'Indirect Marketing Ads, N']
+
+    plt.subplots(figsize=(10, 5))
+    # features = generete_features_list()
+    features = generete_features_list_ss2()
+    reg_res = logistic_regression(f=None, group='O', mode=mode)
+
+    data_dict['O']['Y'] = reg_res[0]
+    data_dict['O']['M'] = reg_res[1]
+    data_dict['O']['N'] = reg_res[2]
+    reg_res = logistic_regression(f=None, group='A', mode=mode)
+
+    data_dict['A']['Y'] = reg_res[0]
+    data_dict['A']['M'] = reg_res[1]
+    data_dict['A']['N'] = reg_res[2]
+
+    reg_res = logistic_regression(f=None, group='S', mode=mode)
+
+    data_dict['S']['Y'] = reg_res[0]
+    data_dict['S']['M'] = reg_res[1]
+    data_dict['S']['N'] = reg_res[2]
+
+    weight_stats('No Ads', 'Y', data_dict['O']['Y'])
+    weight_stats('DM', 'Y', data_dict['A']['Y'])
+    weight_stats('IM', 'Y', data_dict['S']['Y'])
+
+    weight_stats('No Ads', 'M', data_dict['O']['M'])
+    weight_stats('DM', 'M', data_dict['A']['M'])
+    weight_stats('IM', 'M', data_dict['S']['M'])
+    weight_stats('No Ads', 'N', data_dict['O']['N'])
+    weight_stats('DM', 'N', data_dict['A']['N'])
+    weight_stats('IM', 'N', data_dict['S']['N'])
+
+
+
+    groups = ['No Ads, Yes','Direct Marketing, Yes', 'Indirect Marketing, Yes',
+              'No Ads, Maybe','Direct Marketing, Maybe', 'Indirect Marketing, Maybe',
+              'No Ads, No','Direct Marketing, No', 'Indirect Marketing, No']
+
+    for answer in ['Y','M','N']:
+        for ad_c in ['O', 'A', 'S']:
+            data.append(data_dict[ad_c][answer])
+    #sns.set(font_scale=1.4)
+    ax = sns.heatmap(data, xticklabels=features, yticklabels=groups, cmap='coolwarm')
+    ax.tick_params(axis='x', which='major', labelsize=15)
+    ax.hlines([3, 6, 9], *ax.get_xlim())
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=0, ha="left",
+             rotation_mode="anchor")
+    # Loop over data dimensions and create text annotations.
+
+    #    plt.imshow(data, cmap='coolwarm', interpolation='nearest')
+
+    # ax = sns.heatmap(data, linewidth=0.5, cmap='coolwarm')
+
+    #    ax.set_title("Logistic Regression Feature Weights ")
+    #plt.show()
+
+
+    plt.savefig(GRAPH_DIR + 'heatmap_C_1_by_answer2.pdf',bbox_inches='tight')
 
 def chi_3way(r1,r2,l1,l2, to_print = False):
     print(l1 + '-' + l2)
@@ -867,19 +967,103 @@ def results_chi_stats():
     chi_3way([27, 34, 34], [23, 25,48],'N','SN')
 
 
+def get_response_stats():
+    ad_config_counter = {'S':0,'A':0,'X':0}
+    query_counters = {}
+    bias_counters = {}
+    fname = get_filename('user_behaviour', None)
+    condition_counter = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            url = row['url']
+            query = url.split('-')[0]
+            sequence = row['sequence']
+            ad_condition = sequence[0]
+            if ad_condition == 'S' or ad_condition == 'A':
+                ad_config_counter[ad_condition] += 1
+                bias = sequence[1]
+            else:
+                ad_config_counter['X'] += 1
+                bias = sequence[0]
+            if bias not in bias_counters:
+                bias_counters[bias] = 0
+
+            bias_counters[bias]+=1
+            if query not in query_counters:
+                query_counters[query] = 0
+            query_counters[query] += 1
+            condition=query+'-'+ad_condition+'-'+bias
+            if condition not in condition_counter:
+                condition_counter[condition] = 0
+            condition_counter[condition] += 1
+
+    ad_vals = list(ad_config_counter.values())
+    for a,v in ad_config_counter.items():
+        print(a + ':' + str(v))
+    print('Ad config mean:' + str(np.mean(ad_vals)))
+    print('Ad config STD:' + str(np.std(ad_vals)))
+
+    query_vals = list(query_counters.values())
+
+    for a,v in query_counters.items():
+        print(a + ':' + str(v))
+
+    print('Query mean:' + str(np.mean(query_vals)))
+    print('Query stdev:' + str(np.std(query_vals)))
+
+    bias_vals = list(bias_counters.values())
+
+    for a,v in bias_counters.items():
+        print(a + ':' + str(v))
+
+    print('Bias mean:' + str(np.mean(bias_vals)))
+    print('Bias stdev:' + str(np.std(bias_vals)))
+
+    condition_vals = list(condition_counter.values())
+    print ('Condition mean:' + str(np.mean(condition_vals)))
+    print ('Condition stdev:' + str(np.std(condition_vals)))
+
+    print('No Ads & ' + str(ad_config_counter['X']) + ' \\\\')
+    print('\hline')
+    print('Direct marketing ads & ' + str(ad_config_counter['A']) + "\\\\")
+    print('\hline')
+    print('Indirect marketing  ads & ' + str(ad_config_counter['S']) + " \\\\")
+    print('\hline')
+    for query in query_counters:
+        print(query +' & ' + str(query_counters[query]) + "\\\\")
+        print('\hline')
+
+
+
+
+
 def get_user_stats():
     time_spent = []
     num_links = []
+    ad_clicks = 0
+    all_clicks = 0
     users_str = '('
     fname = get_filename('user_behaviour', None)
     with open(fname, newline='', encoding='utf8') as csvf:
         reader = csv.DictReader(csvf)
         for row in reader:
             time_spent.append(float(row['search_time_exp']))
-            num_links.append(float(row['num_links_pressed']))
+            nl = float(row['num_links_pressed'])
+            all_clicks += nl
+            num_links.append(nl)
             users_str += "'" + row['WorkerId'] + "'" + ','
+            sequence = row['sequence']
+            if sequence[0] == 'S' or sequence[0] =='A' :
+                ad_clicks += int(row['link1'])
 
     print('---------------NUM LINKS------------------')
+    print('All links:' + str(all_clicks))
+    print('ad clicks:' + str(ad_clicks))
+    print('orgainc clicks:' + str(all_clicks - ad_clicks))
+    print('% ad clicks:' + str(ad_clicks/all_clicks))
+    print('% orgainc clicks:' + str(1 - ad_clicks/all_clicks))
+
     print('Num links min: ' + str(min(num_links)))
     print('Num links max: ' + str(max(num_links)))
     print ('Num links mean: ' + str(np.mean(num_links)))
@@ -933,9 +1117,459 @@ def get_user_stats():
     print('lower education: ' + str(education_level_dict['low'] / num_users))
 
 
+def print_ctr_all_stats():
+    fname = get_filename('feedback_all_posterior_bias', None)
+    click_info = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            series = row['sequence']
+            click_info[series]= {}
+            if series:
+                click_info[series]['link1'] = int(row['link1'])
+                click_info[series]['link2'] = int(row['link2'])
+                if row['link1 + link2']:
+                    click_info[series]['link1 + link2'] = int(row['link1 + link2'])
+
+    print('---------------------First phsycal link ctr all----------------------')
+    link1_no_ads = click_info['Y']['link1']+ click_info['M']['link1']+ click_info['N']['link1']
+    link1_direct_ads = click_info['AY']['link1']+ click_info['AM']['link1']+ click_info['AN']['link1']
+    link1_indirect_ads = click_info['SY']['link1']+ click_info['SM']['link1']+ click_info['SN']['link1']
+    three_way_anova(link1_no_ads,click_info['link_visibility_no_ads']['link1'],'No Ads',
+                    link1_direct_ads, click_info['link_visibility_A']['link1'],'Direct Marketing Ads',
+                    link1_indirect_ads,  click_info['link_visibility_S']['link1'],'Indirect Marketing Ads')
+
+    link_2_no_ads = click_info['Y']['link2']+ click_info['M']['link2']+ click_info['N']['link2']
+    link2_direct_ads = click_info['AY']['link2'] + click_info['AM']['link2'] + click_info['AN']['link2']
+    link2_indirect_ads = click_info['SY']['link2'] + click_info['SM']['link2'] + click_info['SN']['link2']
+
+    print('------------------------Second phsycal link ctr all----------------------------------------------------')
+    three_way_anova(link_2_no_ads, click_info['link_visibility_no_ads']['link2'], 'No Ads',
+                    link2_direct_ads, click_info['link_visibility_A']['link2'], 'Direct Marketing Ads',
+                    link2_indirect_ads, click_info['link_visibility_S']['link2'], 'Indirect Marketing Ads')
+    print('------------------------First organic link ctr all----------------------------------------------------')
+    three_way_anova(link1_no_ads,click_info['link_visibility_no_ads']['link1'],'No Ads',
+                    link2_direct_ads, click_info['link_visibility_A']['link2'],'Direct Marketing Ads',
+                    link2_indirect_ads, click_info['link_visibility_S']['link2'], 'Indirect Marketing Ads')
+
+
+def get_click_info():
+    fname = get_filename('feedback_all_posterior_bias', None)
+    click_info = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            series = row['sequence']
+            click_info[series] = {}
+            if series:
+                for i in range(1, 11):
+                    click_info[series]['link' + str(i)] = int(row['link' + str(i)])
+    return click_info
+
+
+
+
+def print_ctr_all_links_stats(organic):
+    click_info = get_click_info()
+
+    for i in range(1,10):
+        link_no_ads = click_info['Y']['link'+str(i)] + click_info['M']['link'+str(i)] + click_info['N']['link'+str(i)]
+        if organic:
+            link_direct_ads = click_info['AY']['link'+str(i+1)] + click_info['AM']['link'+str(i+1)] + click_info['AN']['link'+str(i+1)]
+            link_indirect_ads = click_info['SY']['link'+str(i+1)] + click_info['SM']['link'+str(i+1)] + click_info['SN']['link'+str(i+1)]
+
+        else:
+            link_direct_ads = click_info['AY']['link' + str(i)] + click_info['AM']['link' + str(i)] + click_info['AN'][
+                'link' + str(i)]
+            link_indirect_ads = click_info['SY']['link' + str(i)] + click_info['SM']['link' + str(i)] + \
+                                click_info['SN']['link' + str(i)]
+
+        print('------------------------Link ' + str(i) +  ' ctr all----------------------------------------------------')
+        if organic:
+            three_way_anova(link_no_ads, click_info['link_visibility_no_ads']['link'+str(i)], 'No Ads',
+                            link_direct_ads, click_info['link_visibility_A']['link'+str(i+1)], 'Direct Marketing Ads',
+                            link_indirect_ads, click_info['link_visibility_S']['link'+str(i+1)], 'Indirect Marketing Ads')
+        else:
+            three_way_anova(link_no_ads, click_info['link_visibility_no_ads']['link'+str(i)], 'No Ads',
+                            link_direct_ads, click_info['link_visibility_A']['link'+str(i)], 'Direct Marketing Ads',
+                            link_indirect_ads, click_info['link_visibility_S']['link'+str(i)], 'Indirect Marketing Ads')
+
+
+def print_ctr_ads_links_stats(prefix):
+    click_info = get_click_info()
+
+    for i in range(1,10):
+        links_Y = click_info[prefix + 'Y']['link'+str(i)]
+        links_M = click_info[prefix + 'M']['link'+str(i)]
+        links_N = click_info[prefix + 'N']['link'+str(i)]
+        print('------------------------Link ' + str(i) +  ' ctr all----------------------------------------------------')
+        three_way_anova(links_Y, click_info['link_visibility_'+prefix+'Y']['link'+str(i)], 'Y',
+                        links_M, click_info['link_visibility_'+prefix+'M']['link'+str(i)], 'M',
+                        links_N, click_info['link_visibility_'+prefix+'N']['link'+str(i)], 'N')
+
+
+def pairwise_rank_configuration_ads(prefix):
+    click_info = get_click_info()
+    for bias in ['Y', 'M', 'N']:
+        for i in range(1,4):
+            print(prefix + bias + ': link' + str(i) + ' - link ' + str(i+1))
+            l1 = click_info[prefix + bias]['link'+str(i)]
+            l2 = click_info[prefix + bias]['link'+str(i+1)]
+
+            paired_ttest(l1, click_info['link_visibility_'+prefix+bias]['link'+str(i)],
+                             l2, click_info['link_visibility_'+prefix+bias]['link'+str(i+1)])
+
+def pairwise_rank_configuration_no_ads():
+    click_info = get_click_info()
+    for i in range(1,4):
+        print('No Ads : link' + str(i) + ' - link ' + str(i+1))
+        l1 = click_info['Y']['link'+ str(i)] + click_info['M']['link'+ str(i)] + click_info['N']['link'+ str(i)]
+        l2 = click_info['Y']['link'+ str(i+1)] + click_info['M']['link'+ str(i+1)] + click_info['N']['link'+ str(i+1)]
+
+        paired_ttest(l1, click_info['link_visibility_no_ads']['link'+str(i)],
+                         l2, click_info['link_visibility_no_ads']['link'+str(i+1)])
+
+def response_anova():
+    fname = get_filename('feedback_all_posterior_bias', None)
+    answers = {x: {} for x in LATEX_TABLE_ORDER}
+    normed_answers = {x: {} for x in LATEX_TABLE_ORDER}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            seq = row['sequence']
+            if seq not in LATEX_TABLE_ORDER:
+                break
+            for x in ['Y','M','N']:
+                answers[seq][x] = int(row[x])
+        for seq in LATEX_TABLE_ORDER:
+            total = sum(answers[seq].values())
+            for x in ['Y', 'M', 'N']:
+                normed_answers[seq][x] = [1] * answers[seq][x] + [0] * (total - answers[seq][x])
+
+    for bias in ['Y','M','N']:
+        for answer in ['Y','M','N']:
+            g1 = bias
+            g2 = 'A'+bias
+            g3 = 'S'+bias
+            print('----------------------------------------')
+            print('Bias: ' + bias + ', answer: ' + answer )
+            print('----------------------------------------')
+            three_way_anova_from_array(normed_answers[g1][answer],g1,normed_answers[g2][answer],g2,normed_answers[g3][answer],g3,answer+'_answers')
+
+def get_response_array(fname):
+    fname = get_filename(fname, None)
+    answers = {x: {} for x in LATEX_TABLE_ORDER}
+    normed_answers = {x: {} for x in LATEX_TABLE_ORDER}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            seq = row['sequence']
+            if seq not in LATEX_TABLE_ORDER:
+                break
+            for x in ['Y','M','N']:
+                answers[seq][x] = int(row[x])
+        for seq in LATEX_TABLE_ORDER:
+            if not answers[seq].values():
+                continue
+            total = sum(answers[seq].values())
+            for x in ['Y', 'M', 'N']:
+                normed_answers[seq][x] = [1] * answers[seq][x] + [0] * (total - answers[seq][x])
+    return normed_answers
+
+
+def compare_all_queries():
+    normed_answers = {}
+
+    normed_answers['Melatonin'] = get_response_array('feedback_all_posterior_bias_Melatonin')
+    normed_answers['Omega'] = get_response_array('feedback_all_posterior_bias_Omega')
+    normed_answers['Ginko'] = get_response_array('feedback_all_posterior_bias_Ginko')
+
+    for (q1,q2) in [('Omega','Melatonin'), ('Omega','Ginko'), ('Melatonin','Ginko')]:
+        print('-----------------------------------------------')
+        print(q1 + '-' + q2)
+        print('-----------------------------------------------')
+        for seq in LATEX_TABLE_ORDER:
+            if seq[0] == 'S' and (q1 == 'Melatonin' or q2 == 'Melatonin'):
+                continue
+            for answer in ['Y', 'M', 'N']:
+                print('seq' + ':' + seq + ', Answer:' + answer)
+                a1 = normed_answers[q1][seq][answer]
+                a2 = normed_answers[q2][seq][answer]
+                do_ttest(a1,a2)
+
+
+def do_ttest(a1,a2):
+    ttest = ttest_ind(a1, a2, alternative='larger')
+    if ttest[1] < 0.1:
+        print('larger')
+        print('t(' + str(ttest[2]) + ')=' + str(ttest[0]) + 'p=' + str(ttest[1]))
+    ttest = ttest_ind(a2, a1, alternative='larger')
+    if ttest[1] < 0.1:
+        print('smaller')
+        #print(ttest)
+        print('t('+str(ttest[2])+')='+str(ttest[0])+ 'p='+str(ttest[1]))
+
+
+def response_ttest(fname):
+    normed_answers = get_response_array(fname)
+    for bias in ['Y','M','N']:
+        for cmp in ['A','S','AS']:
+            if 'Melatonin' in fname and 'S' in cmp:
+                continue
+            for answer in ['Y', 'M', 'N']:
+                if len(cmp) == 1:
+                    print( bias + '-' + cmp[0] + bias + ', Answer:' + answer)
+                    a1= normed_answers[bias][answer]
+                    a2 = normed_answers[cmp[0] + bias][answer]
+                else:
+                    print(cmp[0] + bias + '-' + cmp[1] + bias + ', Answer:' + answer)
+                    a1 = normed_answers[cmp[0]+bias][answer]
+                    a2 = normed_answers[cmp[1]+bias][answer]
+                do_ttest(a1,a2)
+
+
+def response_ttest_between_answers(fname):
+    normed_answers = get_response_array(fname)
+    for config in ['Y', 'AY', 'SY', 'M', 'AM', 'SM', 'N', 'AN', 'SN']:
+        print('-----------------------------------------------')
+        print(config)
+        print('-----------------------------------------------')
+        for cmp in [('Y','M'),('Y','N'),('M','N')]:
+            print(config + ':' + cmp[0] + '-' + cmp[1])
+            a1 = normed_answers[config][cmp[0]]
+            a2 = normed_answers[config][cmp[1]]
+            t = scipy.stats.ttest_rel(a1, a2)
+            s = t.statistic
+            p = t.pvalue
+            if p < 0.05:
+                print('s = ' + str(s) + ' p = ' + str(p))
+
+
+def response_anova(fname):
+    normed_answers = get_response_array(fname)
+    for config in ['Y','AY','SY','M','AM','SM','N','AN','SN']:
+        print('-----------------------------------------------')
+        print( config)
+        print('-----------------------------------------------')
+        y= normed_answers[config]['Y']
+        m= normed_answers[config]['M']
+        n= normed_answers[config]['N']
+        three_way_anova_from_array(y, 'Y', m, 'M', n, 'N', 'Answers')
+
+
+def response_anova_between_viewpoints(fname):
+    normed_answers = get_response_array(fname)
+    for bias in ['Y','M','N']:
+        for answer in ['Y', 'M', 'N']:
+            print( 'Bias:' + bias + ', Answer:' + answer)
+            no_ads= normed_answers[bias][answer]
+            direct_marketing = normed_answers['A' + bias][answer]
+            indirect_marketing = normed_answers['S' + bias][answer]
+            three_way_anova_from_array(no_ads, 'No Ads', direct_marketing, 'direct Marketing', indirect_marketing, 'Indirect Marketing', 'Answers')
+
+def encode_answers(df):
+    return [ANSWERS_MAP[x] for x in list(df)]
+
+
+def cohens_kappas():
+    fname = get_filename('ctr_decision_correlation', None)
+    df = pd.read_csv(fname)
+    print('overall agreement organic')
+    feedback = encode_answers(df['feedback'])
+    organic = encode_answers(df['ctr_expected_organic'])
+    k = cohen_kappa_score(feedback,organic)
+    print(k)
+    print('overall agreement all')
+    all = encode_answers(df['ctr_expected_phys'])
+    k = cohen_kappa_score(feedback,all)
+    print('All queries per config')
+    print_kappa_per_all_configs(df)
+    for query in ['Does Omega Fatty Acids treat Adhd','Does Ginkgo Biloba treat tinnitus','Does Melatonin  treat jetlag']:
+        print('---------------------------------------------------')
+        print(query)
+        print('---------------------------------------------------')
+        dfq = df.query("query == '" + query + "'")
+        print_kappa_per_all_configs(dfq)
+
+
+def print_kappa_per_all_configs(df):
+    for config in PRINT_ORDER:
+        query = "config == '" + config + "'"
+        print_kappa_for_config(df, query)
+
+
+def print_kappa_for_config(df, query):
+    print(query)
+    df2 = df.query(query)
+    feedback = encode_answers(df2['feedback'])
+    print('organic')
+    organic = encode_answers(df2['ctr_expected_organic'])
+    k = cohen_kappa_score(feedback, organic)
+    print(k)
+    print('overall agreement all')
+    all = encode_answers(df2['ctr_expected_phys'])
+    k = cohen_kappa_score(feedback, all)
+    print(k)
+
+
+def num_links_pressed():
+    fname = get_filename('user_behaviour', None)
+    num_clicks = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            seq = row['sequence']
+            if seq[0] == 'A' or seq[0] == 'S':
+                config = seq[:2]
+            else:
+                config = seq[0]
+            if config not in num_clicks:
+                num_clicks[config] = []
+            num_clicks[config].append(int(row['num_links_pressed']))
+
+    for k,v in num_clicks.items():
+        print(k)
+        #print(v)
+        print(np.mean(v))
+
+    low_contrast = num_clicks['SY'] + num_clicks['SM']
+    high_contrast  = num_clicks['SN']
+    no_ads  = num_clicks['Y'] + num_clicks['M']+ num_clicks['N']
+    ttest = ttest_ind(low_contrast, high_contrast)
+    print(ttest)
+    ttest = ttest_ind(no_ads, high_contrast)
+    print(ttest)
+    ttest = ttest_ind(num_clicks['AY'], num_clicks['SY'])
+    print(ttest)
+    ttest = ttest_ind(num_clicks['M'], num_clicks['SM'])
+    print(ttest)
+
+def print_ttests(print_order = PRINT_ORDER):
+    fname = get_filename('feedback_all_posterior_bias', None)
+    answers = {x:{} for x in print_order}
+
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            seq = row['sequence']
+            if seq not in print_order:
+                break
+            for x in ['Y','M','N']:
+                answers[seq][x] = int(row[x])
+
+        for seq in print_order:
+            s = '\\textbf{' + seq+'}&'
+            total = sum(answers[seq].values())
+            df = total - 1
+         #   s +=str(df)+'&'
+            for cmp in [('Y', 'M'), ('Y', 'N'), ('M', 'N')]:
+                t = paired_ttest(answers[seq][cmp[0]], total, answers[seq][cmp[1]], total, print_res=False)
+                st= "{0:0.2f}".format(t.statistic)
+                if t.pvalue < 0.01:
+                     p = '\checkmark \checkmark'
+                   # p = 'p < 0.01'
+                elif t.pvalue <= 0.05:
+                     p = '\checkmark '
+                  #  p = 'p < 0.05'
+#                elif t.pvalue ==  0.05:
+#                    print('X ')
+                 #   p = 'p = 0.05'
+                else:
+                    p = 'X'
+                s += p + '&'
+                #    p = 'p > 0.05'
+                #s += 't(' + str(df) + ')=' + st +',' + p + '&'
+               # s += 't=' + st +',' + p + '&'
+
+            print(s[:-1]+'\\\\')
+            print('\hline')
+
+def print_feedback_table_with_ttest(print_order = PRINT_ORDER):
+    fname = get_filename('feedback_all_posterior_bias', None)
+    answers = {x:{} for x in print_order}
+    normed_answers = {x:{} for x in print_order}
+
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            seq = row['sequence']
+            if seq not in print_order:
+                break
+            for x in ['Y','M','N']:
+                answers[seq][x] = int(row[x])
+        for seq in print_order:
+            total = sum(answers[seq].values())
+            for x in ['Y','M','N']:
+                normed_answers[seq][x] = answers[seq][x]/total
+
+
+        for seq in print_order:
+            s = '\\textbf{' + seq+'}&'
+            for x in ['Y', 'M', 'N']:
+                normed = "{0:0.2f}".format(normed_answers[seq][x])
+                s += str(answers[seq][x])+'('+ normed +')'+'&'
+            df = sum(answers[seq].values()) - 1
+            s +=str(df)+'&'
+            for cmp in [('Y', 'M'), ('Y', 'N'), ('M', 'N')]:
+                t = paired_ttest(answers[seq][cmp[0]], total, answers[seq][cmp[1]], total, print_res=False)
+                st= "{0:0.2f}".format(t.statistic)
+                if t.pvalue < 0.01:
+                    p = 'p < 0.01'
+                elif t.pvalue < 0.05:
+                    p = 'p < 0.05'
+                elif t.pvalue ==  0.05:
+                    p = 'p = 0.05'
+                else:
+                    p = 'p > 0.05'
+                s += st+','+p+'&'
+            print(s[:-1]+'\\\\')
+            print('\hline')
+
+
 if __name__ == "__main__":
-    get_user_stats()
-    #chi_cont([[31, 45], [39, 42]], row_index=['Y', 'AY'],col_index=['1','2'])
+    #heatmap_per_answer_order()
+    #ttest_from_count()
+    #response_ttest('feedback_all_posterior_bias_Omega')
+    #print_feedback_table_with_ttest()
+    #print_ttests()
+    #response_ttest_between_answers('feedback_all_posterior_bias')
+    response_ttest_between_answers('feedback_all_posterior_bias_Ginko')
+    #response_ttest_between_answers('feedback_all_posterior_bias_Xclude Melatonin')
+    #response_anova('feedback_all_posterior_bias')
+    #response_anova('feedback_all_posterior_bias_Melatonin')
+    #response_anova('feedback_all_posterior_bias_Ginko')
+    #response_anova('feedback_all_posterior_bias_Omega')
+
+
+    #response_ttest('feedback_all_posterior_bias_Melatonin')
+    #response_ttest('feedback_all_posterior_bias_Ginko')
+    #response_ttest('feedback_all_posterior_bias_Omega')
+
+
+    #response_ttest('feedback_all_posterior_bias')
+    #chi_cont([[26, 20], [14+9, 29]], row_index=['M', 'SM'], col_index=['M', 'Y + N'])
+    #num_links_pressed()
+    #pairwise_rank_configuration_no_ads()
+    #pairwise_rank_configuration_ads(prefix = 'A')
+    #pairwise_rank_configuration_ads(prefix = 'S')
+    #print_ctr_ads_links_stats(prefix = 'S')
+    #print_ctr_all_links_stats(organic = True)
+    #print_ctr_all_stats()
+
+    #get_response_stats()
+    #get_user_stats()
+#    cohens_kappas()
+
+    #compare_all_queries()
+
+    #response_ttest('feedback_all_posterior_bias_Melatonin')
+    #response_ttest('feedback_all_posterior_bias_Ginko')
+    #response_ttest('feedback_all_posterior_bias_Omega')
+    #response_ttest('feedback_all_posterior_bias_Xclude Melatonin')
+    #ttest_from_count(c1=13, t1=32, c2=29, t2=56)
+    #response_anova()
+#
+    #chi_cont([[8, 15], [16, 19]], row_index=['Y', 'AY'],col_index=['1','2'])
 
     #chi_cont([[52, 24,21], [53, 35,11],[42, 33,20]], row_index=['Y','AY','SY'])
     #chi_cont([[31, 45,22], [30, 45,22],[40, 40,20]], row_index=['M','AM','SM'])
@@ -947,9 +1581,9 @@ if __name__ == "__main__":
     #chi_cont([[38,7,3], [162,53,37]], row_index=['r1', 'r2'], col_index=['c1', 'c2','c3'])
 
 
-    #ttest_from_count(c1=11, t1=32, c2=4, t2=60)
+
     #ttest_from_count(c1=11, t1=32, c2=33, t2=172)
-#    heatmap()
+
    # chi_cont([[43,51+34], [15,36+26]], row_index=['M', 'SM'], col_index=['Y', 'N+M'])
    # chi_cont([[34,51+43],[26,36+15]], row_index=['SM', 'M'], col_index=['N', 'Y+M'])
    # chi_cont([[51,34+43],[36,26+15]], row_index=['SM', 'M'], col_index=['M', 'Y+N'])

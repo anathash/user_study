@@ -98,16 +98,16 @@ def process_workers(dbcursor, worker_ids, start_date):
         query = r[5]
         if filter_user_new(worker_id, query, answer_treatment, answer_condition, start, end, r[9], r[11], filter_prev_know= False):
             black_list.append(worker_id)
-
-        if not end:
-            continue
         else:
-            time_spent = get_time_spent(start, end)
+            if not end:
+                continue
+            else:
+                time_spent = get_time_spent(start, end)
 
-        if time_spent >= NUM_MNUTES_FOR_BONUS:
-            #if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id][exp_id]) >= NUM_LINKS_FOR_BONUS:
-            if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id]) >= NUM_LINKS_FOR_BONUS:
-                bonus_workers.add(worker_id)
+            if time_spent >= NUM_MNUTES_FOR_BONUS:
+                #if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id][exp_id]) >= NUM_LINKS_FOR_BONUS:
+                if worker_id in num_links_per_workers and len(num_links_per_workers[worker_id]) >= NUM_LINKS_FOR_BONUS:
+                    bonus_workers.add(worker_id)
     done_workers = get_done_workers(worker_ids)
     return worker_to_exp, done_workers, black_list, bonus_workers
 
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     #process_batch(18,21)
     #process_batch(22,26)
     #get_data_for_query('Does Omega Fatty Acids treat Adhd')
-    process_hit('3AFT28WXLF3MBKQ98SHKZDMP73TOI8','2022-03-09 00:00:00')
+    process_hit('39O6Z4JLX2YERZO18Q3ZXF3CYJSXV8','2022-11-30 00:00:00')
 
     #db = connect_to_db('biu')
     #dbcursor = db.cursor()

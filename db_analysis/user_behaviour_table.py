@@ -4,6 +4,7 @@ import shutil
 from collections import Counter
 from datetime import datetime
 
+import numpy as np
 import scipy.stats as stats
 import statsmodels
 from statsmodels.stats.weightstats import ttest_ind
@@ -15,7 +16,9 @@ from process_batch import get_worker_id_list, BATCH_FILE_PREFIX
 #BEHAVIOUR_FILE = '../resources/reports//user_behaviour_limit_5.csv'
 #PRINT_ORDER = ['Y','AY','M','AM','N','AN']
 PRINT_ORDER = ['Y','AY','SY','M','AM','SM','N','AN','SN']
-
+LATEX_TABLE_ORDER = ['Y','M','N','AY','AM','AN','SY','SM','SN']
+ADS_CONFIG = ['X','A','S']
+GT = {'Does Ginkgo Biloba treat tinnitus':'N','Does Omega Fatty Acids treat Adhd':'M','Does Melatonin  treat jetlag':'Y'}
 def write_to_file(exp_data, filtered_users, limit, append = False):
 
     if limit:
@@ -249,6 +252,7 @@ def get_answer_count(mode = 'url', print_update_query = False, local  = True, pr
     print(total)
 
 
+
 def group_behaviour(metric_field, group_by, output_file_name, csv=None):
     data = {}
     with open(BEHAVIOUR_FILE, newline='', encoding='utf8') as csvf:
@@ -264,7 +268,7 @@ def group_behaviour(metric_field, group_by, output_file_name, csv=None):
         writer = csv.DictWriter(csvfile, filednames)
         writer.writeheader()
 
-def get_filename(prefix, limit):
+def get_filename(prefix, limit=None):
     fname = '../resources/reports//' + prefix
     if limit:
         fname += '_limit_'+str(limit)
@@ -585,9 +589,9 @@ def get_posterior_bias(row, ctr_dict):
 
 
 
-def gen_ctr_dict():
+def gen_ctr_dict(f= '../resources/reports/ctr_all.csv'):
     dict = {}
-    with open('../resources/reports/ctr_all.csv', newline='') as csvF:
+    with open(f, newline='') as csvF:
         reader = csv.DictReader(csvF)
         for row in reader:
             dict[row['series']] = list(row.values())[1:]
@@ -712,6 +716,375 @@ def remove_duplicate_workers():
             for (k,v) in soreted_entries:
                 writer.writerow(v)
 
+
+def get_ctr_based_decision(row, organic):
+    ctr_bias = {'Y': 0, 'M': 0, 'N': 0}
+    sequence = row['sequence']
+    ad_config = sequence[0]
+    for i in range(1, len(sequence)+1):
+        s = sequence[i-1]
+        if ad_config =='S' or ad_config == 'A':
+            if i ==1:
+                if organic :
+                    continue
+                else:
+                    s = 'Y'
+                    r = i
+            else:
+                if organic:
+                    r = i -1
+                else:
+                    r = i
+        else:
+            r = i
+
+        ctr_bias[s] += (1 / r) * int(row['link' + str(i)])
+
+    bias_sorted = sorted(ctr_bias.items(), key=lambda kv: kv[1], reverse=True)  # sort newest_first
+    return bias_sorted[0][0]
+
+
+def get_order_based_decision(row):
+    ctr_bias = {'Y': 0, 'M': 0, 'N': 0}
+    sequence = row['sequence']
+    ad_config = sequence[0]
+    num_links = int(row['num_links_pressed'])
+    for i in range(1, num_links+1):
+        rank = int(row['link_order'+str(i)])
+        s = sequence[rank-1]
+        if s == 'A' or s == 'S':
+            if organic:
+                if num_links > 1:
+                    continue
+                else:
+                    return s
+            else:
+                s = 'Y'
+                r = i
+        else:
+            if organic and (ad_config == 'A' or ad_config == 'S'):
+                r=i-1
+            else:
+                r = i
+
+        ctr_bias[s] += (1 / r)
+
+    bias_sorted = sorted(ctr_bias.items(), key=lambda kv: kv[1], reverse=True)  # sort newest_first
+    return bias_sorted[0][0]
+
+
+def ctr_decision_correlation(filter_func=None, filter_title=None):
+    url_stats_list = []
+    fname = get_filename('user_behaviour', None)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            url_stats = {}
+            if filter_title:
+                filter_ok = filter_func(row)
+                if not filter_ok:
+                    continue
+
+            feedback = row['feedback']
+            url_stats['feedback'] = feedback
+            url_stats['query'] = row['url'].split('-')[0]
+            if feedback == 'NS':
+                continue
+
+            sequence= row['sequence']
+            url_stats['sequence'] = sequence
+            url_stats['url'] = row['url']
+
+            if sequence[0] == 'A' or sequence[0] == 'S':
+                url_stats['ad_entered'] = int(row['link1'])
+                ad_config = sequence[0]
+                url_stats['config'] = sequence[:2]
+            else:
+                url_stats['ad_entered'] = 0
+                ad_config = 'X'
+                url_stats['config'] = sequence[0]
+
+            url_stats['ad_config'] = ad_config
+            url_stats['ctr_expected_organic'] = get_ctr_based_decision(row,True)
+            url_stats['ctr_expected_organic_agree'] = 1 if url_stats['ctr_expected_organic'] == feedback else 0
+
+            url_stats['ctr_expected_phys'] = get_ctr_based_decision(row,False)
+            url_stats['ctr_expected_phys_agree'] = 1 if url_stats['ctr_expected_phys'] == feedback else 0
+
+            #url_stats['order_expected_organic'] = get_order_based_decision(row,True)
+            #url_stats['order_expected_organic_agree'] =  1 if url_stats['order_expected_organic'] == feedback else 0
+
+            #url_stats['order_expected_phys'] = get_order_based_decision(row,False)
+            #url_stats['order_expected_phys_agree'] =  1 if url_stats['order_expected_phys'] == feedback else 0
+            url_stats_list.append(url_stats)
+
+    filename = "ctr_decision_correlation"
+    if filter_title:
+        filename += '_' + filter_title
+
+    fname = get_filename(filename, None)
+    with open(fname, 'w', newline='') as csvfile:
+        fieldnames = ['url','query','sequence','config','ad_config','feedback','ad_entered',
+                      'ctr_expected_organic','ctr_expected_organic_agree','ctr_expected_phys','ctr_expected_phys_agree',
+             #         'order_expected_organic','order_expected_organic_agree','order_expected_phys','order_expected_phys_agree'
+                      ]
+
+
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for row in url_stats_list:
+            writer.writerow(row)
+
+
+
+def clicks_per_config(filter_func=None, filter_title=None):
+    url_stats ={}
+    fname = get_filename('user_behaviour', None)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+
+            if filter_title:
+                filter_ok = filter_func(row)
+                if not filter_ok:
+                    continue
+
+            feedback = row['feedback']
+            if feedback == 'NS':
+                continue
+
+            sequence= row['sequence']
+
+            if sequence[0] == 'A' or sequence[0] == 'S':
+                config = sequence[:2]
+                ad = True
+            else:
+                config = sequence[0]
+                ad = False
+
+            if config not in url_stats:
+                url_stats[config]={'AD':0,'Y':0,'M':0,'N':0}
+
+            if ad:
+                url_stats[config]['AD'] += int(row['link1'])
+                start_index = 1
+            else:
+                start_index = 0
+
+            for i in range(start_index, len(sequence)):
+                l = 'link'+str(i+1)
+                clk = int(row[l])
+                v = sequence[i]
+                url_stats[config][v]+= clk
+
+    filename = 'clicks_per_viewpoint'
+    if filter_title:
+        filename += '_' + filter_title
+    fname = get_filename(filename, None)
+    with open(fname, 'w', newline='') as csvfile:
+        fieldnames = ['bias//viewpoint','AD','Y','M','N']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for config,stats in url_stats.items():
+            row = {'bias//viewpoint':config,'AD':stats['AD'],'Y':stats['Y'],'M':stats['M'],'N':stats['N']}
+            writer.writerow(row)
+
+
+def link_contribution_per_config(filter_func=None, filter_title=None):
+    link_stats ={}
+    sums = {}
+    fname = get_filename('user_behaviour', None)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+
+            if filter_title:
+                filter_ok = filter_func(row)
+                if not filter_ok:
+                    continue
+
+            feedback = row['feedback']
+            if feedback == 'NS':
+                continue
+
+            sequence= row['sequence']
+
+            if sequence[0] == 'A' or sequence[0] == 'S':
+                config = sequence[:2]
+            else:
+                config = sequence[0]
+
+            if config not in link_stats:
+                link_stats[config] = {'link'+str(i): 0 for i in range(1, 11)}
+                sums[config] =  {'link'+str(i): 0 for i in range(1, 11)}
+
+            for i in range(0, len(sequence)):
+                l = 'link'+str(i+1)
+                clk = int(row[l])
+                v = sequence[i]
+                if v == feedback:
+                    link_stats[config][l]+= clk
+                sums[config][l]+= clk
+
+    filename = 'links_contributions'
+    if filter_title:
+        filename += '_' + filter_title
+    fname = get_filename(filename, None)
+    with open(fname, 'w', newline='') as csvfile:
+        fieldnames = ['bias//viewpoint']
+        for i in range(1,11):
+            fieldnames.append('link'+str(i))
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for config,stats in link_stats.items():
+            row = {'bias//viewpoint':config}
+            for i in range(1,11):
+                l = 'link'+str(i)
+                if sums[config][l] ==0:
+                    if stats[l] !=0:
+                        print('div by zero!!')
+                    else:
+                        val = 0
+                else:
+                    val = stats[l]/sums[config][l]
+                row.update({'link'+str(i):val})
+            writer.writerow(row)
+
+
+def build_url_stats_table(filter_func=None, filter_title=None):
+    url_stats = dict()
+    #ctr_dict = gen_ctr_dict()
+    fname = get_filename('user_behaviour', None)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            if filter_title:
+                filter_ok = filter_func(row)
+                if not filter_ok:
+                    continue
+            sequence = row['sequence']
+            url = row['url']
+            if sequence[0] == 'A' or sequence[0] == 'S':
+                ad_config = sequence[0]
+            else:
+                ad_config = 'X'
+            if ad_config == 'X':
+                url_entry = url[:-6]
+            else:
+                urls = url.split('-')
+                url_entry = urls[0] +'-' + urls[1][1:][:-6]
+            if url_entry not in url_stats:
+                url_stats[url_entry] = {'X':url_stats_empty_dict(),'A':url_stats_empty_dict(),'S':url_stats_empty_dict()}
+                if ad_config == 'X':
+                    url_stats[url_entry]['sequence'] = sequence
+                    url_stats[url_entry]['bias'] = sequence[0]
+                else:
+                    url_stats[url_entry]['sequence'] = sequence[1:]
+                    url_stats[url_entry]['bias'] = sequence[1]
+
+                url_stats[url_entry]['GT'] = GT[urls[0]]
+            feedback = row['feedback']
+            num_links = row['num_links_pressed']
+
+            url_stats[url_entry][ad_config][feedback] += 1
+            if feedback != 'NS':
+                url_stats[url_entry][ad_config]['num_links'] += int(num_links)
+
+            for i in range(0,len(sequence)):
+                s = sequence[i]
+                if ad_config != 'X' and i > 0:
+                    r = i
+                else:
+                    r = i + 1
+                url_stats[url_entry][ad_config]['ctr_' + s] += (1 / r) * int(row['link' + str(i+1)])
+
+        for url in url_stats.keys():
+            for ad_config in ADS_CONFIG:
+                sum_answers = url_stats[url][ad_config]['Y']+url_stats[url][ad_config]['M']+url_stats[url][ad_config]['N']
+                sum_ctr = url_stats[url][ad_config]['ctr_Y']+url_stats[url][ad_config]['ctr_M']+url_stats[url][ad_config]['ctr_N']
+                if sum_answers == 0:
+                    print(url)
+                    print(ad_config)
+
+                url_stats[url][ad_config]['sum_answers'] = sum_answers
+
+                url_stats[url][ad_config]['num_links'] = 0 if not sum_answers else url_stats[url][ad_config]['num_links'] / sum_answers
+                url_stats[url][ad_config]['Y_norm'] = 0 if not sum_answers else url_stats[url][ad_config]['Y']/sum_answers
+                url_stats[url][ad_config]['M_norm'] = 0 if not sum_answers else  url_stats[url][ad_config]['M']/sum_answers
+                url_stats[url][ad_config]['N_norm'] = 0 if not sum_answers else url_stats[url][ad_config]['N']/sum_answers
+                url_stats[url][ad_config]['ctr_Y'] = 0 if not sum_answers else url_stats[url][ad_config]['ctr_Y']/sum_ctr
+                url_stats[url][ad_config]['ctr_M'] = 0 if not sum_answers else url_stats[url][ad_config]['ctr_M']/sum_ctr
+                url_stats[url][ad_config]['ctr_N'] = 0 if not sum_answers else url_stats[url][ad_config]['ctr_N']/sum_ctr
+                url_stats[url][ad_config]['ctr_A'] = 0 if not sum_answers else url_stats[url][ad_config]['ctr_A']/sum_answers
+                url_stats[url][ad_config]['ctr_S'] = 0 if not sum_answers else url_stats[url][ad_config]['ctr_S']/sum_answers
+            for answer in ['Y','M','N']:
+                url_stats[url]['A_' + answer +'_absolute_diff'] = url_stats[url]['A'][answer +'_norm'] - url_stats[url]['X'][answer+'_norm']
+                url_stats[url]['S_' + answer +'_absolute_diff'] = url_stats[url]['S'][answer +'_norm'] - url_stats[url]['X'][answer+'_norm']
+
+                url_stats[url]['A_' + answer +'_prop_diff'] = 0 if not url_stats[url]['X'][answer+'_norm'] else url_stats[url]['A'][answer +'_norm'] / url_stats[url]['X'][answer+'_norm']
+                url_stats[url]['S_' + answer +'_prop_diff'] = 0 if not url_stats[url]['X'][answer+'_norm'] else url_stats[url]['S'][answer +'_norm'] / url_stats[url]['X'][answer+'_norm']
+
+    filename = "url_stats"
+    if filter_title:
+        filename += '_' + filter_title
+
+    fname = get_filename(filename, None)
+    with open(fname, 'w', newline='') as csvfile:
+        fieldnames = ['url']
+        for k in url_stats['Does Ginkgo Biloba treat tinnitus-MMNNYY'].keys():
+            if k not in ADS_CONFIG:
+                fieldnames.append(k)
+            else:
+                for f in url_stats['Does Ginkgo Biloba treat tinnitus-MMNNYY'][k].keys():
+                    fieldnames.append(k+'_' + f)
+
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for u in url_stats.keys():
+            row = {'url':u}
+            for k in url_stats[u].keys():
+                if k not in ADS_CONFIG:
+                    row[k] = url_stats[u][k]
+                else:
+                    for f in url_stats[u][k].keys():
+                        row[k + '_' + f] = url_stats[u][k][f]
+
+            writer.writerow(row)
+
+
+def url_stats_empty_dict():
+    return {'Y':0,'M':0,'N':0,'NS':0,'num_links':0,'ctr_Y':0,'ctr_M':0,'ctr_N':0,'ctr_A':0,'ctr_S':0}
+
+
+def filter_behaviour_table(limit):
+    rows_dict = {}
+    fname = get_filename('user_behaviour')
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            url = row['url']
+            config = url[:-6]
+            if config not in rows_dict:
+                rows_dict[config]= []
+            if len ( rows_dict[config]) < limit:
+                rows_dict[config].append(row)
+    outfilename = get_filename('user_behaviour', limit)
+    with open(outfilename, 'w', newline='', encoding='utf8') as csvfile:
+        fieldnames = list(list(rows_dict.values())[0][0].keys())
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for rows in rows_dict.values():
+            for row in rows:
+                writer.writerow(row)
+
+
+
+
+
 def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_func=None, filter_title=None, limit = None):
     results = dict()
     possible_answers = set()
@@ -733,6 +1106,9 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
     link_visibility_AY = {x: 0 for x in range(1, 11)}
     link_visibility_AM = {x: 0 for x in range(1, 11)}
     link_visibility_AN = {x: 0 for x in range(1, 11)}
+    link_visibility_Y = {x: 0 for x in range(1, 11)}
+    link_visibility_M = {x: 0 for x in range(1, 11)}
+    link_visibility_N = {x: 0 for x in range(1, 11)}
 
     results['sum_links'] = {'link' + str(i) :0 for i in range(1,11)}
     fname = get_filename('user_behaviour', limit)
@@ -765,6 +1141,12 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
                         link_visibility_SN[i] += 1
                 else:
                     link_visibility_no_ads[i]+=1
+                    if config.startswith('Y'):
+                        link_visibility_Y[i] += 1
+                    if config.startswith('M'):
+                        link_visibility_M[i] += 1
+                    if config.startswith('N'):
+                        link_visibility_N[i] += 1
 
             if prefix:
                 if prefix == 1 and (config.startswith('A') or config.startswith('S')):
@@ -816,6 +1198,9 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
         results['link_visibility_SY'] = {'link' + str(x): link_visibility_SY[x] for x in range(1,11) }
         results['link_visibility_SM'] = {'link' + str(x): link_visibility_SM[x] for x in range(1,11) }
         results['link_visibility_SN'] = {'link' + str(x): link_visibility_SN[x] for x in range(1,11) }
+        results['link_visibility_Y'] = {'link' + str(x): link_visibility_Y[x] for x in range(1, 11)}
+        results['link_visibility_M'] = {'link' + str(x): link_visibility_M[x] for x in range(1, 11)}
+        results['link_visibility_N'] = {'link' + str(x): link_visibility_N[x] for x in range(1, 11)}
 
         fname = get_filename(filename, limit)
         with open(fname, 'w', newline='') as csvfile:
@@ -840,6 +1225,65 @@ def extract_answers_from_behaviour_table(posterior_bias, prefix = None, filter_f
 
             writer.writerow({})
 
+
+def extract_expected_answers_from_behaviour_table(organic, filter_func=None, filter_title=None, limit = None):
+    results = dict()
+    possible_answers = set()
+    ctr_dict = gen_ctr_dict()
+    filename = "expected_answers"
+    if organic:
+        filename += '_organic'
+    if filter_title:
+        filename += '_'+filter_title
+
+    fname = get_filename('ctr_decision_correlation', limit)
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            if filter_title:
+                filter_ok = filter_func(row)
+                if not filter_ok:
+                    continue
+            config = get_posterior_bias(row, ctr_dict)
+
+            if config not in results:
+                results[config] = {'Y': 0, 'N': 0, 'M': 0,'sum_answers':0}
+                results[config + '_NORM'] = {}
+            if organic:
+                answer = row['ctr_expected_organic']
+            else:
+                answer = row['ctr_expected_phys']
+            results[config][answer] += 1
+            results[config]['sum_answers'] += 1
+
+        for config in results.keys():
+            if config.startswith('link') or 'NORM' in config or config == 'sum_links':
+                continue
+            r = results[config]
+            sum_answers = results[config]['sum_answers']
+#            sum_answers = r['Y']+r['N']+r['M']+r['NS']
+#            results[config]['sum_answers'] = sum_answers
+            results[config+'_NORM']['Y'] = r['Y']/sum_answers
+            results[config+'_NORM']['N'] = r['N']/sum_answers
+            results[config+'_NORM']['M'] = r['M']/sum_answers
+
+
+
+        fname = get_filename(filename, limit)
+        with open(fname, 'w', newline='') as csvfile:
+            fieldnames = ['sequence'] + ['Y','M','N','sum_answers']
+
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+
+            for config in PRINT_ORDER:
+                print_row_to_file(writer, config, results, possible_answers)
+            writer.writerow({})
+
+            for config in PRINT_ORDER:
+                print_row_to_file(writer, config+'_NORM', results, possible_answers)
+            writer.writerow({})
+            writer.writerow({})
 
 
 def generate_ctr_dict_file(filter_func=None, filter_title=None, limit = None):
@@ -908,6 +1352,8 @@ def write_ctr_file(name,clicks,link_visibility):
             writer.writerow(row)
 
 def print_row_to_file(writer, config, results, possible_answers):
+    if config not in results:
+        return
     counters = results[config]
     row = {'sequence': config}
     row.update(counters)
@@ -984,7 +1430,7 @@ def gen_order_rank(filter_field = None, filter_func= None, filter_title = None):
 
 
 def get_user_data(limit = None):
-    db = connect_to_db(local=False)
+    db = connect_to_db(db_name='shared')
     users = {}
     num_links = []
     num_links_per_config = {'AM':[],'AN':[],'SN':[],'SM':[],'NO ADS':[]}
@@ -1036,8 +1482,8 @@ def get_user_data(limit = None):
         print('num participants: ' + str(len(gender)))
         print('min age:' + str(min(age)))
         print('max age:' + str(max(age)))
-        print('mean age: ' + str(mean(age)))
-        print('STD age: ' + str(std(age)))
+        print('mean age: ' + str(np.mean(age)))
+        print('STD age: ' + str(np.std(age)))
         print('male: ' + str(c['male']) + ':' + str(c['male']/len(gender)))
         print('female: ' + str(c['female']) + ':' + str(c['female']/len(gender)))
         print('average time: ' + str(mean(time_spent)))
@@ -1204,18 +1650,248 @@ def num_answer_stats():
             writer.writerow(counts)
 
 
+def print_feedback_table(print_order = PRINT_ORDER):
+    fname = get_filename('feedback_all_posterior_bias', None)
+    answers = {x:{} for x in print_order}
+    normed_answers = {x:{} for x in print_order}
+    stdev =  {x:{} for x in print_order}
+
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            seq = row['sequence']
+            if seq not in print_order:
+                break
+            for x in ['Y','M','N']:
+                answers[seq][x] = int(row[x])
+        for seq in print_order:
+            total = sum(answers[seq].values())
+            for x in ['Y','M','N']:
+                a = [1]*answers[seq][x] + [0]*(total - answers[seq][x])
+                #normed_answers[seq][x] = answers[seq][x]/total
+                normed_answers[seq][x] = mean = np.mean(a)
+                stdev[seq][x] = np.std(a)
+
+        for seq in print_order:
+            s = '\\textbf{' + seq+'}&'
+            for x in ['Y', 'M', 'N']:
+                normed = "{0:0.2f}".format(normed_answers[seq][x])
+                std = "{0:0.2f}".format(stdev[seq][x])
+                s += str(answers[seq][x])+'(M='+ normed +', SD='+std+')'+'&'
+                #s += str(answers[seq][x])+'('+ normed +')'+'&'
+            print(s[:-1]+'\\\\')
+            print('\hline')
+
 
 def process_behaviour_table(posterior_bias, prefix=None, filter_func=None, filter_title=None, limit=None):
     generate_ctr_dict_file()
     num_answer_stats()
     extract_answers_from_behaviour_table(posterior_bias, prefix, filter_func, filter_title, limit)
+    extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Xclude Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag') == False)
+    extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+    extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title='Melatonin', filter_func=lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
+    extract_expected_answers_from_behaviour_table(organic=True)
+    extract_expected_answers_from_behaviour_table(organic=True, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+    extract_expected_answers_from_behaviour_table(organic=True, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    extract_expected_answers_from_behaviour_table(organic=True, filter_title='Melatonin', filter_func=lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
+
+    extract_expected_answers_from_behaviour_table(organic=False)
+    extract_expected_answers_from_behaviour_table(organic=False, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+    extract_expected_answers_from_behaviour_table(organic=False, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    extract_expected_answers_from_behaviour_table(organic=True, filter_title='Melatonin', filter_func=lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
+
+
+
+def test_ctr_decision():
+    row = {'sequence':'AYMNY','link1':'1','link2':0, 'link3':1,'link4':1,'link5':1}
+    c = get_ctr_based_decision(row, True)
+    assert (c == 'M')
+    c = get_ctr_based_decision(row, False)
+    assert (c == 'Y')
+    row = {'sequence': 'SYMNY', 'link1': '1', 'link2': 0, 'link3': 1, 'link4': 1,'link5':1}
+    c = get_ctr_based_decision(row, True)
+    assert (c == 'M')
+    c = get_ctr_based_decision(row, False)
+    assert (c == 'Y')
+
+    row = {'sequence':'YMNY','link1':'1','link2':0, 'link3':1,'link4':1}
+    c = get_ctr_based_decision(row, True)
+    assert (c == 'Y')
+    c = get_ctr_based_decision(row, False)
+    assert (c == 'Y')
+
+    # row = {'sequence': 'AYMNY', 'num_links_pressed':'1','link_order1': '1'}
+    # c = get_order_based_decision(row, True)
+    # assert (c == 'A')
+    # c = get_order_based_decision(row, False)
+    # assert (c == 'Y')
+    #
+    # row = {'sequence': 'SYMNY','num_links_pressed':'1', 'link_order1': '1'}
+    # c = get_order_based_decision(row, True)
+    # assert (c == 'S')
+    # c = get_order_based_decision(row, False)
+    # assert (c == 'Y')
+    #
+    # row = {'sequence': 'ANNMM', 'num_links_pressed':'3', 'link_order1': '1', 'link_order2': '4', 'link_order3': '5'}
+    # c = get_order_based_decision(row, True)
+    # assert (c == 'M')
+    # c = get_order_based_decision(row, False)
+    # assert (c == 'Y')
+
+
+def build_posterior_bias_table_per_viewpoint(f):
+    sequences = ['YYYMMMNNN','YYYNNNMMM','MMMYYYNNN','MMMNNNMMM','NNNYYYMMM','NNNMMMYYY',
+                 'YYMMNN', 'YYNNMM', 'MMYYNN', 'MMNNMM', 'NNYYMM', 'NNMMYY',
+                 'YMNYMNYMN','YNMYNMYNM','MYNMYNMYN','MNYMNYMNY','NYMNYMNYM','NMYNMYNMY',
+                 'YMNYMN', 'YNMYNM', 'MYNMYN', 'MNYMNY', 'NYMNYM', 'NMYNMY']
+    ctr_dict = gen_ctr_dict(f)
+    print('sequence,Y,M,N')
+    for s in sequences:
+        bias = {'Y':0.0,'M':0.0,'N':0.0}
+        first_viewpoint = s[0]
+        ctr = ctr_dict[first_viewpoint]
+        for i in range(0,len(s)):
+            v = s[i]
+            bias[v] = bias[v] + float(ctr[i+1])
+        print(s+','+str(bias['Y'])+','+str(bias['M'])+','+str(bias['N']))
+
+
+def get_answers_num_per_config():
+    fname = get_filename('user_behaviour')
+    output = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            url = row['url']
+            query = url.split('-')[0]
+            sequence = row['sequence']
+
+            if sequence[0] =='S':
+                ad = 'Indirect'
+                bias = sequence[1:]
+            elif sequence[0] =='A':
+                ad = 'Direct'
+                bias = sequence[1:]
+            else:
+                ad = 'No Ads'
+                bias = sequence
+            config = query+'_'+bias
+            if config not in output:
+                output[config]={'No Ads':0,'Direct':0,'Indirect':0}
+
+            output[config][ad] += 1
+    outfile =  get_filename('config_num_answer_count')
+    with open(outfile, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=['config', 'No Ads', 'Direct', 'Indirect'])
+        writer.writeheader()
+        for config, counts in output.items():
+            row = {'config':config,'No Ads': counts['No Ads'], 'Direct': counts['Direct'], 'Indirect': counts['Indirect']}
+            writer.writerow(row)
+
+
+
+def get_answers_per_config(main_bias = False, ratio = False):
+    fname = get_filename('user_behaviour')
+    output = {}
+    with open(fname, newline='', encoding='utf8') as csvf:
+        reader = csv.DictReader(csvf)
+        for row in reader:
+            url = row['url']
+            query = url.split('-')[0]
+            sequence = row['sequence']
+
+            if sequence[0] =='S' or sequence[0] =='A':
+                if sequence[0] == 'S':
+                    ad = 'Indirect'
+                else:
+                    ad = 'Direct'
+                if main_bias:
+                    bias = sequence[1]
+                else:
+                    bias = sequence[1:]
+            else:
+                ad = 'No Ads'
+                if main_bias:
+                    bias = sequence[1]
+                else:
+                    bias = sequence
+            config = query+'_'+bias
+            if config not in output:
+                output[config]={'No Ads_Y':0,'No Ads_M':0,'No Ads_N':0,
+                                'Direct_Y':0,'Direct_M':0,'Direct_N':0,
+                                'Indirect_Y':0,'Indirect_M':0,'Indirect_N':0}
+
+            answer = row['feedback']
+            if answer != 'NS':
+                output[config][ad+'_'+answer] += 1
+
+    outfile =  get_filename('config_answer_count')
+    with open(outfile, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=['config', 'No Ads_Y','No Ads_M','No Ads_N',
+                                                     'Direct_Y','Direct_M','Direct_N',
+                                                     'Indirect_Y','Indirect_M','Indirect_N'])
+        writer.writeheader()
+        for config, counts in output.items():
+            if ratio:
+                precentages = {}
+                for c in ['No Ads', 'Direct', 'Indirect']:
+                    sum = 0
+                    for a in ['Y','M','N']:
+                        sum += counts[c+'_'+a]
+                    for a in ['Y', 'M', 'N']:
+                        if sum != 0:
+                            precentages[c+'_'+a] = counts[c+'_'+a]/sum
+                        else:
+                            precentages[c + '_' + a] = 0
+                row_dict = precentages
+            else:
+                row_dict = counts
+
+            row = {'config': config, 'No Ads_Y': row_dict['No Ads_Y'], 'No Ads_M': row_dict['No Ads_M'],
+                   'No Ads_N': row_dict['No Ads_N'],
+                   'Direct_Y': row_dict['Direct_Y'], 'Direct_M': row_dict['Direct_M'],
+                   'Direct_N': row_dict['Direct_N'],
+                   'Indirect_Y': row_dict['Indirect_Y'], 'Indirect_M': row_dict['Indirect_M'],
+                   'Indirect_N': row_dict['Indirect_N']}
+            writer.writerow(row)
+
 
 
 if __name__ == "__main__":
-    #generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
+    generate_user_behaviour_table(filter_users=True, db_name='biu', add_time_diff_actions=True)
+    #extract_answers_from_behaviour_table(posterior_bias=True, prefix=False, limit=2)
+
+    #get_answers_per_config()
+    #filter_behaviour_table(2)
+    #link_contribution_per_config()
+    #clicks_per_config()
+    #clicks_per_config(filter_title='Ginko', filter_func=lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+    #clicks_per_config(filter_title='Omega',filter_func=lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    #clicks_per_config(filter_title='Melatonin',filter_func=lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
+
+
+    #build_posterior_bias_table_per_viewpoint(f='../resources/reports/ctr_direct_marketing.csv')
+    #print_feedback_table(PRINT_ORDER)
+    #create_response_prediction_features_vectors('S')
+    #create_response_prediction_features_vectors('A')
+    #create_response_prediction_features_vectors('O')
+
+
+    #build_url_stats_table()
+    #test_ctr_decision()
+    #ctr_decision_correlation()
+    #extract_expected_answers_from_behaviour_table(organic=False)
+
+    #print_feedback_table()
+
+    #
     #failed_attention_checks(db_name='biu')
-    process_behaviour_table(prefix=False, posterior_bias=True, limit=None)
-#    num_answer_stats()
+    #process_behaviour_table(prefix=False, posterior_bias=True, limit=None)
+
+
+
+
 
     #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None)
 
@@ -1223,21 +1899,19 @@ if __name__ == "__main__":
 
     #remove_duplicate_workers()
 
-    #create_response_prediction_features_vectors('S')
-    #create_response_prediction_features_vectors('A')
-    #create_response_prediction_features_vectors('O')
     #sequence_scores()
     #ctr_per_viewpoint()
     #create_response_prediction_features_vectors()
     #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Xclude Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag') == False)
-    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Melatonin', filter_func  = lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
-   # extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
-   # extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Ginko', filter_func  = lambda x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title = 'Omega', filter_func  = lambda x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
+    #extract_answers_from_behaviour_table(prefix=False, posterior_bias=True, limit=None, filter_title='Melatonin',
+    #                                     filter_func=lambda x: x['url'].startswith('Does Melatonin  treat jetlag'))
     #extract_answers_from_behaviour_table(prefix=1, limit=None)
 #
     #extract_clicks_from_behaviour_table(prefix = False, posterior_bias=True, limit=None)
     #extract_answers_from_behaviour_table(prefix=2, limit=None)
-    #get_user_data()
+   # get_user_data()
     #sequence_scores()
     #sequence_score_to_answer(limit= 5, buckets=False, skip_ad=True)
     #sequence_score_to_answer_posterior(limit= 5)
@@ -1255,11 +1929,5 @@ if __name__ == "__main__":
 
     #extract_answers_from_behaviour_table(prefix = 1, limit=5)
     #
-
-    #extract_answers_from_behaviour_table(prefix=1, limit = 5, filter_title='_xclude_melatonin',
-    #                                     filter_func=lambda x: not x['url'].startswith('Does Melatonin  treat jetlag'))
-    #extract_answers_from_behaviour_table(prefix=1, limit = 5, filter_title = 'Does Ginkgo Biloba treat tinnitus', filter_func  = lambda  x: x['url'].startswith('Does Ginkgo Biloba treat tinnitus'))
-    #extract_answers_from_behaviour_table(prefix=1, limit = 5,  filter_title = 'Does Melatonin  treat jetlag', filter_func  = lambda  x: x['url'].startswith('Does Melatonin  treat jetlag'))
-    #extract_answers_from_behaviour_table(prefix=1, limit = 5,  filter_title = 'Does Omega Fatty Acids treat Adhd', filter_func  = lambda  x: x['url'].startswith('Does Omega Fatty Acids treat Adhd'))
 
 

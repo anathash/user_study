@@ -40,7 +40,10 @@ def get_urls(soup):
     urls = []
     urls_divs = soup.find_all("div", {"class": "egMi0 kCrYT"})
     first_link = soup.find_all("div", {"class": "kCrYT"})
-    urls.append(get_url(first_link[1]))
+    l1 = get_url(first_link[1])
+    if not l1:
+        l1 = get_url(first_link[2])
+    urls.append(l1)
     for d in urls_divs:
         urls.append(get_url(d))
     return urls
@@ -73,7 +76,7 @@ def generate_csv(treatment, condition, bias):
         entries.append(entry)
 
     write_dir = 'C:\\research\\falseMedicalClaims\\user study\\snippet study\\annotations\\automatically_generated\\'
-    with open(write_dir + query + '.csv', 'w', newline='') as csvfile:
+    with open(write_dir + query + '.csv', 'w', encoding='utf-8', newline='') as csvfile:
         fieldnames = ['url','snippet']
 
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -83,7 +86,11 @@ def generate_csv(treatment, condition, bias):
 
     #urls = get_urls(soup)
 
+
+
+
 if __name__ == "__main__":
-    generate_csv('ginkgo biloba', 'tinnitus', 'positive')
+    #generate_csv('ginkgo biloba', 'tinnitus', 'positive')
+    generate_csv('omega fatty acids ', 'adhd', 'neutral')
 
 

@@ -172,7 +172,7 @@ def filter_user_new(user, query, treatment_answer, condition_answer, start,end, 
             print_filter_message(start, user, 'user.lower().startswith(test_user')
             return 'test'
 
-    if not reason or reason == 'None':
+    if not reason or reason.lower() == 'none':
         print_filter_message(start, user, 'no reason')
         return 'no reason'
 
@@ -182,14 +182,15 @@ def filter_user_new(user, query, treatment_answer, condition_answer, start,end, 
 
     #print_msg = sdt > string_to_datetime('12/27/2021, 12:01:31 PM')
     print_msg = False
-    bad_wok_msg = unsatisfactory(query, treatment_answer, condition_answer, time, print_msg)
-    if bad_wok_msg:
-        print_filter_message(start, user, 'unsatisfactory work')
-        return bad_wok_msg
 
     if filter_prev_know and prev_know == 'yes':
         print_filter_message(start, user, 'previous knowledge')
         return 'previous knowledge'
+
+    bad_wok_msg = unsatisfactory(query, treatment_answer, condition_answer, time, print_msg)
+    if bad_wok_msg:
+        print_filter_message(start, user, 'unsatisfactory work')
+        return bad_wok_msg
 
     return False
 
